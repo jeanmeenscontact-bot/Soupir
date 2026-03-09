@@ -1,0 +1,2060 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="theme-color" content="#F2F0EB"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <title>Soupir.</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;overflow:hidden;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;background:#F2F0EB;color:#1C1C1E;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:1000;opacity:0.10;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");}
+    ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#C5BFB6;border-radius:2px;}
+    .app-screen{height:100vh;height:100svh;}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+    input,textarea{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;-webkit-user-select:text;user-select:text;}
+    @media(hover:hover){
+      .pill-btn:hover:not(.active-pill){background:#E4DED5 !important;}
+      .icon-btn:hover{background:#D8D2C8 !important;}
+      .lib-row:hover{background:#E5E0D8 !important;}
+      .barline-hit:hover{opacity:0.4;}
+      .chord-tap:hover{background:rgba(26,26,26,0.07) !important;}
+      .num-tap:hover{color:#8A847C !important;}
+      .pref-btn:hover{background:#E8E2D8 !important;}
+      .cell-text:hover{background:rgba(122,80,48,0.12) !important;}
+    }
+    .chord-tap:active{background:rgba(26,26,26,0.12) !important;transform:scale(0.94);}
+    .pill-btn:active{transform:scale(0.97);}
+    .cell-text:active{background:rgba(122,80,48,0.18) !important;}
+    @keyframes slideUp{from{transform:translateY(110%);}to{transform:translateY(0);}}
+    @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+    @keyframes floatIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+    .sheet-bg{animation:fadeIn 0.16s ease;}
+    .sheet-panel{animation:slideUp 0.28s cubic-bezier(0.32,0.72,0,1);}
+    .home-btn{animation:floatIn 0.38s ease both;}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useRef}=React;
+
+// ─── MUSIC ENGINE ─────────────────────────────────────────────────────────────
+const SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FLAT=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const FLAT_KEYS=['F','Bb','Eb','Ab','Db','Gb'];
+const MAJOR_IV=[0,2,4,5,7,9,11];
+const DEG_LBL=['I','II','III','IV','V','VI','VII'];
+const DEG_QUAL=['maj7','m7','m7','maj7','7','m7','m7b5'];
+const ALL_KEYS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const LETTERS=['C','D','E','F','G','A','B'];
+const MINOR_IV=[0,2,3,5,7,8,10];
+const MINOR_DEG_QUAL=['m7','m7b5','maj7','m7','m7','maj7','7'];
+const MINOR_DEG_LBL=['i','ii°','III','iv','v','VI','VII'];
+
+const QUALITIES=[
+  {id:'maj',suffix:'',group:'Triades'},{id:'min',suffix:'m',group:'Triades'},
+  {id:'dim',suffix:'dim',group:'Triades'},{id:'aug',suffix:'aug',group:'Triades'},
+  {id:'sus4',suffix:'sus4',group:'Triades'},{id:'sus2',suffix:'sus2',group:'Triades'},
+  {id:'dom7',suffix:'7',group:'Septièmes'},{id:'maj7',suffix:'maj7',group:'Septièmes'},
+  {id:'min7',suffix:'m7',group:'Septièmes'},{id:'mMaj7',suffix:'mMaj7',group:'Septièmes'},
+  {id:'hdim',suffix:'m7b5',group:'Septièmes'},{id:'dim7',suffix:'dim7',group:'Septièmes'},
+  {id:'maj6',suffix:'6',group:'Autres'},{id:'min6',suffix:'m6',group:'Autres'},
+  {id:'5',suffix:'5',group:'Autres'},
+];
+const EXTENSIONS=[
+  {id:'n9',label:'9',suffix:'9'},{id:'b9',label:'♭9',suffix:'b9'},
+  {id:'s9',label:'♯9',suffix:'#9'},{id:'n11',label:'11',suffix:'11'},
+  {id:'s11',label:'♯11',suffix:'#11'},{id:'n13',label:'13',suffix:'13'},
+  {id:'b13',label:'♭13',suffix:'b13'},{id:'b5',label:'♭5',suffix:'b5'},
+  {id:'s5',label:'♯5',suffix:'#5'},{id:'add9',label:'add9',suffix:'add9'},
+];
+
+function noteIdx(n){let i=SHARP.indexOf(n);return i!==-1?i:FLAT.indexOf(n);}
+function transNote(n,s,f){const i=noteIdx(n);if(i===-1)return n;const ni=((i+s)%12+12)%12;return f?FLAT[ni]:SHARP[ni];}
+function parseRoot(c){const m=c&&c.match(/^([A-G][b#]?)/);return m?m[1]:null;}
+function transChord(c,s,f){if(!c||c==='—'||c==='%'||c==='/')return c;const r=parseRoot(c);if(!r)return c;return transNote(r,s,f)+c.slice(r.length);}
+function buildScale(key,mode='maj'){const f=FLAT_KEYS.includes(key);const ivs=mode==='min'?MINOR_IV:MAJOR_IV;const quals=mode==='min'?MINOR_DEG_QUAL:DEG_QUAL;const lbls=mode==='min'?MINOR_DEG_LBL:DEG_LBL;return ivs.map((iv,i)=>{const ni=((noteIdx(key)+iv)%12+12)%12;const note=f?FLAT[ni]:SHARP[ni];return{degree:lbls[i],note,quality:quals[i]};});}
+function chordToDeg(chord,key){const r=parseRoot(chord);if(!r)return null;const ci=noteIdx(r),ki=noteIdx(key);if(ci===-1||ki===-1)return null;const iv=((ci-ki)%12+12)%12;const di=MAJOR_IV.indexOf(iv);return di===-1?null:DEG_LBL[di]+chord.slice(r.length);}
+function parseChordFull(chord){
+  const r=parseRoot(chord);if(!r)return{root:'C',qualityId:'maj',extensions:[]};
+  const rest=chord.slice(r.length);
+  const sorted=[...QUALITIES].sort((a,b)=>b.suffix.length-a.suffix.length);
+  let qualityId='maj',extStr=rest;
+  for(const q of sorted){if(rest.startsWith(q.suffix)&&(q.suffix!==''||rest==='')){qualityId=q.id;extStr=rest.slice(q.suffix.length);break;}}
+  return{root:r,qualityId,extensions:EXTENSIONS.filter(e=>extStr.includes(e.suffix)).map(e=>e.id)};
+}
+function buildChordStr(root,qualityId,extensions){
+  const q=QUALITIES.find(q=>q.id===qualityId);
+  return root+(q?q.suffix:'')+EXTENSIONS.filter(e=>extensions.includes(e.id)).map(e=>e.suffix).join('');
+}
+function rootToLetterAcc(root){
+  if(!root||root.length===0)return{letter:'C',acc:''};
+  return{letter:root[0],acc:root.length>1?root[1]:''};
+}
+
+function autoHarmonizeTriad(letter,acc,key,mode='maj'){
+  const noteStr=letter+(acc==='#'?'#':acc==='b'?'b':'');
+  const ni=noteIdx(noteStr);
+  const ki=noteIdx(key);
+  if(ni===-1||ki===-1)return{qualityId:'maj',extensions:[]};
+  const semis=((ni-ki)%12+12)%12;
+  const DIA_MAJ={0:'maj',2:'min',4:'min',5:'maj',7:'maj',9:'min',11:'dim'};
+  const DIA_MIN={0:'min',2:'dim',3:'maj',5:'min',7:'min',8:'maj',10:'maj'};
+  const map=mode==='min'?DIA_MIN:DIA_MAJ;
+  return{qualityId:map[semis]||'maj',extensions:[]};
+}
+
+// ─── PREFS SYSTEM ─────────────────────────────────────────────────────────────
+const DEFAULT_PREFS={minor:'m',dim:'°',aug:'+',maj7:'maj7',hdim:'ø',accentColor:'black',autoHarmonize:true};
+function loadPrefs(){try{const s=localStorage.getItem('soupir_prefs');return s?{...DEFAULT_PREFS,...JSON.parse(s)}:DEFAULT_PREFS;}catch{return DEFAULT_PREFS;}}
+function savePrefs(p){try{localStorage.setItem('soupir_prefs',JSON.stringify(p));}catch{}}
+function applyPrefs(chord,prefs){
+  if(!chord||chord==='%'||chord==='/'||chord==='—')return chord;
+  const root=parseRoot(chord);if(!root)return chord;
+  const p=prefs||DEFAULT_PREFS;
+  let rest=chord.slice(root.length);
+  if(rest.startsWith('m7b5')){rest=(p.hdim==='ø'?'ø':'m7b5')+rest.slice(4);}
+  else if(rest.startsWith('mMaj7')){/* keep */}
+  else if(rest.startsWith('maj7')){rest=(p.maj7==='Δ'?'Δ':'maj7')+rest.slice(4);}
+  else if(rest.startsWith('dim7')){rest=(p.dim==='°'?'°7':'dim7')+rest.slice(4);}
+  else if(rest.startsWith('dim')){rest=(p.dim==='°'?'°':'dim')+rest.slice(3);}
+  else if(rest.startsWith('aug')){rest=(p.aug==='+'?'+':'aug')+rest.slice(3);}
+  else if(rest.startsWith('m')&&!rest.startsWith('maj')){rest=(p.minor==='-'?'-':'m')+rest.slice(1);}
+  return root+rest;
+}
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const BAR_TYPES=[
+  {id:'none',label:'—',hint:'Pas de barre initiale'},
+  {id:'normal',label:'|',hint:'Barre simple'},
+  {id:'double',label:'||',hint:'Double barre'},
+  {id:'repeat-start',label:'|:',hint:'Début de reprise'},
+  {id:'repeat-end',label:':|',hint:'Fin de reprise'},
+  {id:'repeat-end-start',label:':|:',hint:'Reprise enchaînée'},
+  {id:'final',label:'|]',hint:'Fin de morceau'},
+];
+const SIGN_TYPES=[
+  {id:'coda',   sym:'⊕',    label:'⊕ Coda'},
+  {id:'segno',  sym:'𝄋',   label:'𝄋 Segno'},
+  {id:'toCoda', sym:'To ⊕', label:'To ⊕'},
+  {id:'dc',     sym:'D.C.', label:'D.C.'},
+  {id:'ds',     sym:'D.S.', label:'D.S.'},
+  {id:'fine',   sym:'Fine', label:'Fine'},
+];
+const TEXT_SUGG=['D.S. al Coda','D.S. al Fine','Fine','D.C. al Coda','D.C. al Fine'];
+const TIME_SIGS=['2/4','3/4','4/4','5/4','6/8','7/8','12/8'];
+function getBeatsInEighths(ts){const m={'2/4':4,'3/4':6,'4/4':8,'5/4':10,'6/8':6,'7/8':7,'12/8':12};return m[ts]||8;}
+const KEY_SIG={'C':{t:'s',n:0},'G':{t:'s',n:1},'D':{t:'s',n:2},'A':{t:'s',n:3},
+  'E':{t:'s',n:4},'B':{t:'s',n:5},'F#':{t:'s',n:6},'C#':{t:'s',n:7},
+  'F':{t:'f',n:1},'Bb':{t:'f',n:2},'Eb':{t:'f',n:3},'Ab':{t:'f',n:4},'Db':{t:'f',n:5},'Gb':{t:'f',n:6}};
+const SHP_Y=[30,45,25,40,55,35,50],FLT_Y=[50,35,55,40,60,45,65];
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const mkSplit2=(chords,signs=[],volta=null,text='')=>({chords,signs,volta:volta||null,text:text||''});
+const mk=(chords,barAfter='normal',signs=[],volta=null,text='',split2=null)=>
+  ({chords,barAfter,signs,volta:volta||null,text:text||'',split2:split2||null});
+
+// ─── STAFF SECTION FACTORIES ──────────────────────────────────────────────────
+const NOTE_BEATS_G={whole:8,half:4,quarter:2,eighth:1};
+function staffNextBeat(notes){return notes.reduce((s,n)=>s+(NOTE_BEATS_G[n.value]||2),0);}
+function staffIsFull(notes,ts){return staffNextBeat(notes)>=getBeatsInEighths(ts||'4/4');}
+function staffRemBeats(notes,ts){return getBeatsInEighths(ts||'4/4')-staffNextBeat(notes);}
+const mkStaffMeasure=()=>({notes:[],annotations:[]});
+const mkStaffSection=(name='Portée',timeSig='4/4',clef='treble',key='C')=>({
+  type:'staff',name,timeSig,clef,key,
+  measures:Array.from({length:4},()=>mkStaffMeasure()),
+});
+
+const LIBRARY_INIT=[
+  {id:1,title:'Autumn Leaves',key:'Bb',bpm:112,style:'Jazz standard',timeSig:'4/4',sections:[
+    {name:'A',startBar:'repeat-start',measures:[
+      mk(['Cm7','F7']),mk(['Bbmaj7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),
+      mk(['Gm7']),mk(['Gm7']),mk(['Am7b5','D7'],'normal',['toCoda'],'1'),mk(['Gm7'],'repeat-end'),
+    ]},
+    {name:'B',startBar:'normal',measures:[
+      mk(['Am7b5','D7'],'normal',['coda'],'2'),mk(['Gm7']),mk(['Gm7','C7']),mk(['Fmaj7']),
+      mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),mk(['Gm7'],'final',['fine']),
+    ]},
+  ]},
+  {id:2,title:'Misty',key:'Eb',bpm:88,style:'Jazz ballad',timeSig:'4/4',sections:[
+    {name:'A',startBar:'normal',measures:[
+      mk(['Ebmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Abm7','Db7']),
+      mk(['Ebmaj7','Cm7']),mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Ebmaj7'],'final'),
+    ]},
+  ]},
+  {id:3,title:'So What',key:'D',bpm:136,style:'Modal jazz',timeSig:'4/4',sections:[
+    {name:'A',startBar:'repeat-start',measures:[
+      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),
+      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
+    ]},
+    {name:'B',startBar:'repeat-start',measures:[
+      mk(['Ebm7']),mk(['Ebm7']),mk(['Ebm7']),mk(['Ebm7']),
+      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
+    ]},
+  ]},
+  {id:4,title:'All The Things You Are',key:'Ab',bpm:104,style:'Jazz standard',timeSig:'4/4',sections:[
+    {name:'A',startBar:'normal',measures:[
+      mk(['Fm7']),mk(['Bbm7']),mk(['Eb7']),mk(['Abmaj7']),
+      mk(['Dbmaj7']),mk(['Dm7b5','G7']),mk(['Cmaj7']),mk(['Cmaj7']),
+    ]},
+    {name:'B',startBar:'normal',measures:[
+      mk(['Cm7']),mk(['Fm7']),mk(['Bb7']),mk(['Ebmaj7']),
+      mk(['Abmaj7']),mk(['Dm7b5','G7']),mk(['Cmaj7']),mk(['Cmaj7'],'final'),
+    ]},
+  ]},
+  {id:5,title:'Take Five',key:'Eb',bpm:174,style:'Cool jazz',timeSig:'5/4',sections:[
+    {name:'A',startBar:'repeat-start',measures:[
+      mk(['Ebm7']),mk(['Bbm7']),mk(['Ebm7']),mk(['Bbm7']),
+      mk(['Ebm7']),mk(['Bbm7']),mk(['Ebm7']),mk(['Bbm7'],'repeat-end'),
+    ]},
+    {name:'B',startBar:'repeat-start',measures:[
+      mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),
+      mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Bbm7']),mk(['Bbm7'],'repeat-end'),
+    ]},
+  ]},
+];
+
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
+function SoupirLogo({size=90,color='#1A1A1A'}){
+  return(<svg width={size} height={size*1.6} viewBox="0 0 80 128" fill="none">
+    <path d="M52 6 C64 12 58 26 46 32 C32 38 28 52 46 60 C62 68 60 86 46 96 C38 102 26 108 20 120"
+      stroke={color} strokeWidth="5.5" strokeLinecap="round" fill="none"/>
+    <path d="M46 96 C40 102 30 106 24 100 C20 96 22 90 28 88"
+      stroke={color} strokeWidth="5" strokeLinecap="round" fill="none"/>
+    <circle cx="52" cy="6" r="5" fill={color}/>
+  </svg>);
+}
+
+// ─── BARLINE — largeur fixe 22 px ─────────────────────────────────────────────
+function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
+  const BW=22;
+  const isRepeat=['repeat-start','repeat-end','repeat-end-start'].includes(type);
+  const INK=isRepeat?accentColor:'#1A1A1A';
+  const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0};
+  const thick={width:3.5,alignSelf:'stretch',background:INK,flexShrink:0};
+  const sp=(w)=>({width:w,flexShrink:0});
+  const dots=(
+    <div style={{display:'flex',flexDirection:'column',justifyContent:'center',
+      gap:5,alignSelf:'center',flexShrink:0}}>
+      <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
+      <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
+    </div>);
+  let inner=null;
+  switch(type){
+    case 'none':             inner=null;break;
+    case 'normal':           inner=<div style={thin}/>;break;
+    case 'double':           inner=<><div style={thin}/><div style={sp(2)}/><div style={thin}/></>;break;
+    case 'repeat-start':     inner=<><div style={thin}/><div style={sp(2)}/><div style={thick}/><div style={sp(3)}/>{dots}</>;break;
+    case 'repeat-end':       inner=<>{dots}<div style={sp(3)}/><div style={thick}/><div style={sp(2)}/><div style={thin}/></>;break;
+    case 'repeat-end-start': inner=<>{dots}<div style={sp(2)}/><div style={thick}/><div style={sp(1)}/><div style={thick}/><div style={sp(2)}/>{dots}</>;break;
+    case 'final':            inner=<><div style={thin}/><div style={sp(2)}/><div style={{...thick,width:5}}/></>;break;
+    default:                 inner=<div style={thin}/>;
+  }
+  return(
+    <div className={onClick?'barline-hit':''}
+      onClick={onClick}
+      style={{width:BW,flexShrink:0,alignSelf:'stretch',minHeight:minH,
+        display:'flex',alignItems:'stretch',justifyContent:'center',
+        cursor:onClick?'pointer':'default',transition:'opacity 0.1s'}}>
+      <div style={{display:'flex',alignItems:'stretch'}}>{inner}</div>
+    </div>);
+}
+
+// ─── SHEET WRAPPER ────────────────────────────────────────────────────────────
+function Sheet({onClose,children}){
+  return(<div className="sheet-bg"
+    style={{position:'fixed',inset:0,background:'rgba(20,18,15,0.5)',zIndex:400,display:'flex',alignItems:'flex-end'}}
+    onClick={onClose}>
+    <div className="sheet-panel"
+      style={{width:'100%',background:'#EDE8E0',borderRadius:'20px 20px 0 0',
+        maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 -4px 40px rgba(0,0,0,0.2)'}}
+      onClick={e=>e.stopPropagation()}>
+      <div style={{display:'flex',justifyContent:'center',padding:'10px 0 0'}}>
+        <div style={{width:36,height:4,background:'#C0BAB0',borderRadius:2}}/>
+      </div>
+      {children}
+    </div>
+  </div>);
+}
+
+// ─── CHORD PICKER — accord + signes + volta + annotation ──────────────────────
+function ChordPicker({picker,onChange,onConfirm,onCancel,prefs,displayKey,displayMode='maj',autoHarmonize}){
+  const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+  const canonical=buildChordStr(root,picker.qualityId,picker.extensions);
+  const chord=applyPrefs(canonical,prefs);
+
+  const mText=picker.measureText||'';
+  const signs=picker.signs||[];
+  const volta=picker.volta||null; // null | '1'|'2'|'3' | customString
+  const isCustomVolta=volta!==null&&!['1','2','3'].includes(volta);
+
+  const pill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?col:'#C0BAB0'}`,borderRadius:100,
+    padding:'10px 0',fontWeight:700,fontSize:15,cursor:'pointer',
+    transition:'all 0.1s',lineHeight:1,fontFamily:'inherit',textAlign:'center',
+  });
+  const smPill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?col:'#C0BAB0'}`,borderRadius:100,
+    padding:'8px 12px',fontWeight:700,fontSize:13,cursor:'pointer',
+    transition:'all 0.1s',lineHeight:1,fontFamily:'inherit',
+  });
+  const secLbl=(t)=>(
+    <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+      letterSpacing:1.4,marginBottom:8,marginTop:4}}>{t}</div>
+  );
+
+  return(<Sheet onClose={onCancel}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+      padding:'10px 22px 14px',borderBottom:'1px solid #D6D0C8'}}>
+      <div style={{display:'flex',alignItems:'baseline',gap:10}}>
+        <span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>Accord</span>
+        <span style={{fontSize:36,fontWeight:900,letterSpacing:'-1px',minWidth:120,lineHeight:1}}>
+          {chord||<span style={{color:'#C0BAB0'}}>—</span>}
+        </span>
+      </div>
+      <button onClick={onCancel}
+        style={{background:'transparent',border:'none',color:'#8A847C',fontSize:24,cursor:'pointer',fontFamily:'inherit'}}>×</button>
+    </div>
+
+    <div style={{overflowY:'auto',flex:1,padding:'14px 20px 6px'}}>
+      {secLbl('Fondamentale')}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:10}}>
+        {LETTERS.map(l=>(
+          <button key={l} className="pill-btn" style={pill(picker.letter===l)}
+            onClick={()=>onChange({...picker,letter:l,...(autoHarmonize?autoHarmonizeTriad(l,picker.acc,displayKey,displayMode):{})})}  >{l}</button>
+        ))}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:14}}>
+        {[{v:'',l:'♮ naturel'},{v:'#',l:'♯ dièse'},{v:'b',l:'♭ bémol'}].map(a=>(
+          <button key={a.v} className={`pill-btn${picker.acc===a.v?' active-pill':''}`}
+            style={{...pill(picker.acc===a.v,'#4A3F2F'),padding:'8px 0',fontSize:13}}
+            onClick={()=>onChange({...picker,acc:a.v,...(autoHarmonize?autoHarmonizeTriad(picker.letter,a.v,displayKey,displayMode):{})})}  >{a.l}</button>
+        ))}
+      </div>
+
+      {secLbl('Qualité')}
+      {['Triades','Septièmes','Autres'].map(g=>{
+        const qs=QUALITIES.filter(q=>q.group===g);
+        const labels={'maj':'Maj','min':prefs?.minor==='-'?'−':'m','dim':prefs?.dim==='°'?'°':'dim',
+          'aug':prefs?.aug==='+'?'+':'aug','sus4':'sus4','sus2':'sus2','dom7':'7',
+          'maj7':prefs?.maj7==='Δ'?'Δ':'maj7','min7':prefs?.minor==='-'?'−7':'m7',
+          'mMaj7':'mMaj7','hdim':prefs?.hdim==='ø'?'ø':'m7b5',
+          'dim7':prefs?.dim==='°'?'°7':'dim7','maj6':'6','min6':prefs?.minor==='-'?'−6':'m6','5':'5'};
+        return(<div key={g} style={{marginBottom:10}}>
+          <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600}}>{g.toUpperCase()}</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {qs.map(q=>(
+              <button key={q.id} className={`pill-btn${picker.qualityId===q.id?' active-pill':''}`}
+                style={{...smPill(picker.qualityId===q.id)}}
+                onClick={()=>onChange({...picker,qualityId:q.id})}>
+                {labels[q.id]||q.suffix||'Maj'}
+              </button>
+            ))}
+          </div>
+        </div>);
+      })}
+
+      {secLbl('Extensions & altérations')}
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
+        {EXTENSIONS.map(e=>{
+          const active=picker.extensions.includes(e.id);
+          return(<button key={e.id} className={`pill-btn${active?' active-pill':''}`}
+            style={{...smPill(active,'#4A3F2F')}}
+            onClick={()=>onChange({...picker,extensions:active
+              ?picker.extensions.filter(x=>x!==e.id):[...picker.extensions,e.id]})}>
+            {e.label}
+          </button>);
+        })}
+      </div>
+      {picker.extensions.length>0&&(
+        <button onClick={()=>onChange({...picker,extensions:[]})}
+          style={{background:'transparent',border:'none',color:'#8A847C',fontSize:12,
+            cursor:'pointer',textDecoration:'underline',fontFamily:'inherit',marginBottom:10,display:'block'}}>
+          Effacer les extensions
+        </button>
+      )}
+
+      {/* ── Signes de navigation ── */}
+      <div style={{borderTop:'1px solid #E8E2D8',paddingTop:12,marginTop:4}}>
+        {secLbl('Signes de navigation')}
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+          {SIGN_TYPES.map(st=>{
+            const active=signs.includes(st.id);
+            return(<button key={st.id}
+              style={{...smPill(active,'#2A5A2A'),border:`1.5px solid ${active?'#2A5A2A':'#C0BAB0'}`}}
+              onClick={()=>onChange({...picker,signs:active?signs.filter(x=>x!==st.id):[...signs,st.id]})}>
+              {st.sym}
+            </button>);
+          })}
+        </div>
+      </div>
+
+      {/* ── Crochet de volta ── */}
+      <div style={{marginBottom:10}}>
+        {secLbl('Crochet de volta')}
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+          {/* Aucun */}
+          <button style={smPill(volta===null)}
+            onClick={()=>onChange({...picker,volta:null})}>
+            Aucun
+          </button>
+          {/* Presets 1, 2, 3 — affichage visuel crochet */}
+          {['1','2','3'].map(v=>(
+            <button key={v} style={{
+              ...smPill(volta===v&&!isCustomVolta),
+              display:'flex',alignItems:'center',justifyContent:'center',
+            }}
+              onClick={()=>onChange({...picker,volta:v})}>
+              <span style={{display:'inline-flex',alignItems:'flex-start',
+                borderLeft:`2px solid ${volta===v&&!isCustomVolta?'#F2EDE4':'#1A1A1A'}`,
+                borderTop:`2px solid ${volta===v&&!isCustomVolta?'#F2EDE4':'#1A1A1A'}`,
+                padding:'2px 5px',lineHeight:1,fontSize:12,fontWeight:900}}>
+                {v}.
+              </span>
+            </button>
+          ))}
+          {/* Personnalisé */}
+          <button style={smPill(isCustomVolta)}
+            onClick={()=>{if(!isCustomVolta)onChange({...picker,volta:''});}}>
+            Perso.
+          </button>
+        </div>
+        {isCustomVolta&&(
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{display:'inline-flex',alignItems:'center',
+              borderLeft:'2.5px solid #1A1A1A',borderTop:'2.5px solid #1A1A1A',
+              padding:'3px 8px',fontSize:13,fontWeight:800,color:'#1A1A1A',flexShrink:0}}>
+              {volta||'?'}.
+            </div>
+            <input value={volta||''} onChange={e=>onChange({...picker,volta:e.target.value})}
+              placeholder="Ex : A, Bis, Trio…"
+              style={{flex:1,background:'#FAF8F4',border:'1.5px solid #D0CAC0',
+                borderRadius:8,padding:'8px 12px',fontSize:12,color:'#1A1A1A',outline:'none'}}/>
+          </div>
+        )}
+      </div>
+
+      {/* ── Annotation ── */}
+      <div style={{borderTop:'1px solid #E8E2D8',paddingTop:12,marginTop:4}}>
+        {secLbl('Annotation')}
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+          {TEXT_SUGG.map(s=>(
+            <button key={s} onClick={()=>onChange({...picker,measureText:s})}
+              style={{background:mText===s?'#1A1A1A':'transparent',
+                color:mText===s?'#F2EDE4':'#7A5030',
+                border:`1.5px solid ${mText===s?'#1A1A1A':'#C4A882'}`,
+                borderRadius:100,padding:'6px 10px',fontWeight:700,fontSize:11,
+                cursor:'pointer',fontFamily:'inherit',fontStyle:'italic'}}>
+              {s}
+            </button>
+          ))}
+          {mText&&(
+            <button onClick={()=>onChange({...picker,measureText:''})}
+              style={{background:'transparent',border:'none',color:'#8A847C',fontSize:11,
+                cursor:'pointer',textDecoration:'underline',fontFamily:'inherit'}}>
+              Effacer
+            </button>
+          )}
+        </div>
+        <input value={mText} onChange={e=>onChange({...picker,measureText:e.target.value})}
+          placeholder="Ex : Solo, Intro…"
+          style={{width:'100%',background:'#FAF8F4',border:'1.5px solid #D0CAC0',
+            borderRadius:8,padding:'8px 12px',fontSize:12,color:'#1A1A1A',outline:'none'}}/>
+      </div>
+    </div>
+
+    <div style={{display:'flex',gap:10,padding:'12px 20px 28px',borderTop:'1px solid #D6D0C8'}}>
+      <button onClick={onCancel}
+        style={{flex:1,background:'transparent',border:'1.5px solid #C0BAB0',color:'#8A847C',
+          padding:'13px',borderRadius:100,fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+        Annuler
+      </button>
+      <button onClick={onConfirm}
+        style={{flex:2,background:'#1A1A1A',border:'none',color:'#F2EDE4',
+          padding:'13px',borderRadius:100,fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+        Valider « {chord} »
+      </button>
+    </div>
+  </Sheet>);
+}
+
+// ─── BARLINE PICKER ───────────────────────────────────────────────────────────
+function BarlinePicker({current,onSelect,onClose}){
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 22px 10px',borderBottom:'1px solid #D6D0C8'}}>
+      <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4}}>
+        Type de barre de mesure
+      </div>
+    </div>
+    <div style={{padding:'12px 18px 28px',display:'flex',flexDirection:'column',gap:7,overflowY:'auto'}}>
+      {BAR_TYPES.map(bt=>(
+        <button key={bt.id} onClick={()=>onSelect(bt.id)}
+          style={{display:'flex',alignItems:'center',gap:14,
+            background:bt.id===current?'#1A1A1A':'transparent',
+            border:`1.5px solid ${bt.id===current?'#1A1A1A':'#C0BAB0'}`,
+            borderRadius:12,padding:'13px 18px',cursor:'pointer',fontFamily:'inherit',transition:'all 0.12s'}}>
+          <span style={{fontSize:17,fontWeight:900,color:bt.id===current?'#F2EDE4':'#1A1A1A',
+            fontFamily:'monospace',minWidth:38,textAlign:'center'}}>{bt.label}</span>
+          <span style={{fontSize:13,color:bt.id===current?'#D0C8BC':'#6B6560',fontWeight:500}}>{bt.hint}</span>
+        </button>
+      ))}
+    </div>
+  </Sheet>);
+}
+
+// ─── TIME SIG PICKER ──────────────────────────────────────────────────────────
+function TimeSigPicker({current,onSelect,onClose}){
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 22px 10px',borderBottom:'1px solid #D6D0C8'}}>
+      <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4}}>Signature rythmique</div>
+    </div>
+    <div style={{padding:'20px',display:'flex',gap:10,flexWrap:'wrap',paddingBottom:32}}>
+      {TIME_SIGS.map(ts=>(
+        <button key={ts} onClick={()=>onSelect(ts)}
+          style={{background:ts===current?'#1A1A1A':'transparent',color:ts===current?'#F2EDE4':'#1A1A1A',
+            border:`1.5px solid ${ts===current?'#1A1A1A':'#C0BAB0'}`,borderRadius:100,
+            padding:'14px 22px',fontWeight:800,fontSize:20,cursor:'pointer',fontFamily:'inherit'}}>
+          {ts}
+        </button>
+      ))}
+    </div>
+  </Sheet>);
+}
+
+// ─── MEASURE SHEET — actions structurelles uniquement ─────────────────────────
+function MeasureSheet({si,mi,measure,onAction,onClose,prefs}){
+  const chordDisplay=measure.chords.map(c=>applyPrefs(c,prefs)).join('  ');
+  const isSplit=!!measure.split2;
+  const nMChords=measure.chords.length;
+  const addLabel=nMChords===1?'Ajouter un 2ème accord':nMChords===2?'Ajouter un 3ème accord':'Ajouter un 4ème accord';
+  const actions=[
+    ...(isSplit?[]:[
+      ...(nMChords<4?[{icon:'+♩',l:addLabel,a:'addChord'}]:[]),
+      ...(nMChords>1?[{icon:'−♩',l:'Retirer le dernier accord',a:'removeChord'}]:[]),
+    ]),
+    isSplit
+      ?{icon:'⟺', l:'Réunir les 2 demi-mesures',  a:'unsplit'}
+      :{icon:'⟨⟩',l:'Diviser en 2 demi-mesures',   a:'split'},
+    {icon:'+',  l:'Insérer une mesure après',       a:'addMeasure'},
+    {icon:'×',  l:'Supprimer cette mesure',         a:'deleteMeasure',danger:true},
+  ];
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'12px 22px 14px',borderBottom:'1px solid #D6D0C8',display:'flex',alignItems:'baseline',gap:10}}>
+      <span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>Mesure {mi+1}</span>
+      <span style={{fontSize:26,fontWeight:900,letterSpacing:'-0.8px'}}>{chordDisplay}</span>
+      {isSplit&&<span style={{fontSize:11,color:'#8A847C',fontWeight:600,marginLeft:4}}>/ {measure.split2.chords.join(' ')}</span>}
+    </div>
+    <div style={{display:'flex',flexDirection:'column',paddingBottom:24,overflowY:'auto'}}>
+      {actions.map(item=>(
+        <button key={item.a} onClick={()=>onAction(item.a)}
+          style={{display:'flex',alignItems:'center',gap:16,padding:'15px 22px',
+            background:'transparent',border:'none',borderBottom:'1px solid #EAE4DC',
+            cursor:'pointer',fontFamily:'inherit',color:item.danger?'#C0392B':'#1A1A1A',textAlign:'left'}}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>{item.icon}</span>
+          <span style={{fontSize:15,fontWeight:600}}>{item.l}</span>
+        </button>
+      ))}
+    </div>
+  </Sheet>);
+}
+
+// ─── CHORD TEXT — typographie iReal Pro (racine grande, altération + qualité petites) ──
+function ChordText({chord,fs=30,color='#1C1C1E',weight=900}){
+  if(!chord)return null;
+  const root=parseRoot(chord);
+  if(!root)return<span style={{fontSize:fs,fontWeight:weight,color,letterSpacing:'-0.5px'}}>{chord}</span>;
+  const letter=root[0];
+  const rawAcc=root.slice(1);
+  const acc=rawAcc==='b'?'♭':rawAcc==='#'?'♯':'';
+  const suffix=chord.slice(root.length);
+  const accFs=Math.round(fs*0.52);   // altération : ~52% de la racine
+  const sfxFs=Math.round(fs*0.44);   // qualité    : ~44% de la racine
+  // Style iReal Pro : altération superscript (haut), qualité à ~20% depuis le haut
+  const sfxTop=Math.round(fs*0.20);  // décalage vertical de la qualité
+  return(
+    <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>
+      <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.5px'}}>{letter}</span>
+      {(acc||suffix)&&(
+        <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,gap:1,
+          paddingLeft:1,
+          paddingTop: acc ? 0 : sfxTop}}>
+          {acc&&<span style={{fontSize:accFs,fontWeight:weight,lineHeight:1}}>{acc}</span>}
+          {suffix&&<span style={{fontSize:sfxFs,fontWeight:600,lineHeight:1,
+            color:color==='#1C1C1E'?'#525252':color,
+            paddingTop: acc ? 1 : 0}}>{suffix}</span>}
+        </span>
+      )}
+    </span>
+  );
+}
+
+
+// ─── DEGREE TEXT — même typographie que ChordText pour le mode degrés ─────────
+function DegreeText({deg,fs=30,color='#1C1C1E',weight=900}){
+  if(!deg)return null;
+  // Parse : altération optionnelle + chiffre romain + qualité
+  const m=deg.match(/^([b#]?)(I{1,3}|IV|VI{0,3}|VII?)(.*)/);
+  if(!m)return<span style={{fontSize:fs,fontWeight:weight,color,letterSpacing:'-0.3px'}}>{deg}</span>;
+  const acc=m[1]==='b'?'♭':m[1]==='#'?'♯':'';
+  const numeral=m[2];
+  const suffix=m[3];
+  const accFs=Math.round(fs*0.52);
+  const sfxFs=Math.round(fs*0.44);
+  const sfxTop=Math.round(fs*0.20);
+  return(
+    <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>
+      {acc&&<span style={{fontSize:accFs,fontWeight:weight,lineHeight:1,paddingTop:1}}>{acc}</span>}
+      <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.3px'}}>{numeral}</span>
+      {suffix&&(
+        <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
+          paddingLeft:1,paddingTop:sfxTop}}>
+          <span style={{fontSize:sfxFs,fontWeight:700,lineHeight:1,
+            color:color==='#1C1C1E'?'#3A3530':color}}>{suffix}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+// ─── STAFF EDITOR — portée personnalisable ────────────────────────────────────
+// Positions verticales : pos=0 → ligne médiane (Si3), chaque demi-ton = 5px
+// Portée : 5 lignes à y=30,40,50,60,70 (top→bas) → pos 8,6,4,2,0 sur lignes
+const STAFF_H=100;
+const STAFF_LINES=[30,40,50,60,70]; // y de haut en bas
+// pos relatif : 0=C4(Do4), 1=D4, 2=E4, 3=F4, 4=G4(ligne médiane portée sol), etc.
+// y = 70 - pos*5  (pos augmente vers le haut)
+const sY=(pos)=>70-pos*5;
+const yToPos=(y)=>Math.round((70-y)/5);
+
+const NOTE_VALS=[
+  {id:'whole',  sym:'𝅝', label:'Ronde'},
+  {id:'half',   sym:'𝅗', label:'Blanche'},
+  {id:'quarter',sym:'♩', label:'Noire'},
+  {id:'eighth', sym:'♪', label:'Croche'},
+];
+const CLEF_TYPES=[
+  {id:'treble',label:'Sol',sym:'𝄞'},
+  {id:'bass',  label:'Fa', sym:'𝄢'},
+];
+
+// Noms des notes en do fixe selon la position (pos 0=C4)
+const POS_NAMES=['Do','Ré','Mi','Fa','Sol','La','Si','Do','Ré','Mi','Fa','Sol','La'];
+
+function NoteShape({note,onRemove,clef}){
+  // Pour la clef de fa, on décale les positions: pos 0 = Mi2 (une tierce en-dessous de la portée)
+  const x=note.x;
+  const y=sY(note.pos);
+  const filled=note.value==='quarter'||note.value==='eighth';
+  const whole=note.value==='whole';
+  const up=note.pos<4;
+  const sx=up?x+5.5:x-5.5;
+  const sy1=y+(up?-4:4);
+  const sy2=up?y-30:y+30;
+
+  // Lignes supplémentaires (en dessous ou au-dessus)
+  const extraLines=[];
+  if(note.pos<=0){ for(let p=0;p>=(note.pos-1);p-=2) if(p<=0) extraLines.push(p); }
+  if(note.pos>=9){ for(let p=10;p<=(note.pos+1);p+=2) if(p>=10) extraLines.push(p); }
+
+  return(<g onClick={(e)=>{e.stopPropagation();onRemove();}} style={{cursor:'pointer'}}>
+    {extraLines.map(p=>(
+      <line key={p} x1={x-9} y1={sY(p)} x2={x+9} y2={sY(p)} stroke="#1A1A1A" strokeWidth="1.4"/>
+    ))}
+    {note.acc&&(
+      <text x={x-14} y={y+4} fontSize="13" fill="#1A1A1A" fontFamily="serif">
+        {note.acc==='#'?'♯':note.acc==='b'?'♭':'♮'}
+      </text>
+    )}
+    {whole
+      ?<ellipse cx={x} cy={y} rx={7} ry={4.5} fill="none" stroke="#1A1A1A" strokeWidth="1.8"/>
+      :<ellipse cx={x} cy={y} rx={6.5} ry={4.5} fill={filled?'#1A1A1A':'none'} stroke="#1A1A1A" strokeWidth="1.6"
+          transform={`rotate(-18,${x},${y})`}/>
+    }
+    {!whole&&<line x1={sx} y1={sy1} x2={sx} y2={sy2} stroke="#1A1A1A" strokeWidth="1.6"/>}
+    {note.value==='eighth'&&(up
+      ?<path d={`M${sx} ${sy2} C${sx+16} ${sy2+6} ${sx+12} ${sy2+18} ${sx+2} ${sy2+22}`}
+          fill="none" stroke="#1A1A1A" strokeWidth="1.6"/>
+      :<path d={`M${sx} ${sy2} C${sx-16} ${sy2-6} ${sx-12} ${sy2-18} ${sx-2} ${sy2-22}`}
+          fill="none" stroke="#1A1A1A" strokeWidth="1.6"/>
+    )}
+  </g>);
+}
+
+function StaffZone({piece,prefs,timeSig}){
+  const [expanded,setExpanded]=useState(true);
+  const [staffNotes,setStaffNotes]=useState({});
+  const [clef,setClef]=useState('treble');
+  const [staffKey]=useState(piece.key||'C');
+  const [notePick,setNotePick]=useState({visible:false,si:0,mi:0,beat:0,pos:4,noteVal:'quarter',noteAcc:null});
+
+  const ks=KEY_SIG[staffKey]||{t:'s',n:0};
+  const COLS=4;
+  const NOTE_BEATS_Z={whole:8,half:4,quarter:2,eighth:1};
+  const SLOT_W=22;
+  const totalBeats=getBeatsInEighths(timeSig||piece.timeSig||'4/4');
+  const MWD_Z=totalBeats*SLOT_W;
+  const CLEF_W=36;
+  const ACC_W=Math.max(ks.n*10+8,8);
+  const TSW=26;
+  const PREF_W_Z=CLEF_W+ACC_W+TSW;
+  const INK='#1A1A1A';
+  const SHP_Y_T=[30,45,25,40,55,35,50];
+  const FLT_Y_T=[50,35,55,40,60,45,65];
+
+  function handleTap(e,si,mi){
+    const rect=e.currentTarget.getBoundingClientRect();
+    const relX=e.clientX-rect.left;
+    const relY=e.clientY-rect.top;
+    const pos=Math.max(-4,Math.min(14,yToPos(relY)));
+    const beat=Math.max(0,Math.min(totalBeats-1,Math.floor(relX/SLOT_W)));
+    const k=`${si}_${mi}`;
+    const existing=staffNotes[k]||[];
+    const hit=existing.findIndex(n=>{
+      const nb=NOTE_BEATS_Z[n.value]||1;
+      return beat>=n.beat&&beat<n.beat+nb&&Math.abs(n.pos-pos)<=1;
+    });
+    if(hit!==-1){
+      setStaffNotes(sn=>({...sn,[k]:existing.filter((_,i)=>i!==hit)}));
+    } else {
+      setNotePick({visible:true,si,mi,beat,pos,noteVal:'quarter',noteAcc:null});
+    }
+  }
+
+  function placeNote(){
+    const{si,mi,beat,pos,noteVal,noteAcc}=notePick;
+    const nb=NOTE_BEATS_Z[noteVal]||1;
+    const k=`${si}_${mi}`;
+    const existing=staffNotes[k]||[];
+    const overlaps=existing.some(n=>{
+      const enb=NOTE_BEATS_Z[n.value]||1;
+      return beat<n.beat+enb&&beat+nb>n.beat;
+    });
+    if(!overlaps&&beat+nb<=totalBeats){
+      setStaffNotes(sn=>({...sn,[k]:[...existing,{beat,pos,value:noteVal,acc:noteAcc}]}));
+    }
+    setNotePick(np=>({...np,visible:false}));
+  }
+
+  // SVG de clef
+  function renderClef(cx,cy){
+    if(clef==='treble')
+      return(<text x={cx} y={cy} fontSize="56" fontFamily="serif" fill={INK}>𝄞</text>);
+    return(<text x={cx} y={cy-6} fontSize="38" fontFamily="serif" fill={INK}>𝄢</text>);
+  }
+
+  // Armure (altérations à la clé) — déjà dans SHP_Y_T / FLT_Y_T définis ci-dessus
+
+  return(
+    <div style={{border:'1.5px solid #D0CAC0',borderRadius:12,margin:'8px 0 12px',overflow:'hidden',background:'#F8F5F0'}}>
+
+      {/* ── En-tête zone ── */}
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
+        background:'#EDE8E0',borderBottom:expanded?'1px solid #D0CAC0':'none',cursor:'pointer',userSelect:'none'}}
+        onClick={()=>setExpanded(v=>!v)}>
+        <span style={{fontSize:20,fontFamily:'serif',lineHeight:1}}>𝄞</span>
+        <span style={{fontSize:11,fontWeight:700,color:'#1A1A1A',flex:1}}>Portée</span>
+        {expanded&&(
+          <button onClick={e=>{e.stopPropagation();setClef(c=>c==='treble'?'bass':'treble');}}
+            style={{background:'transparent',border:'1px solid #D0CAC0',borderRadius:100,
+              padding:'2px 8px',fontSize:11,fontFamily:'inherit',cursor:'pointer',color:'#6B6560',display:'flex',alignItems:'center',gap:3}}>
+            <span style={{fontSize:13,fontFamily:'serif'}}>{clef==='treble'?'𝄞':'𝄢'}</span>
+            <span>{clef==='treble'?'Sol':'Fa'}</span>
+          </button>
+        )}
+        {expanded&&<span style={{fontSize:11,fontWeight:700,color:'#8A847C'}}>{staffKey}</span>}
+        <span style={{fontSize:11,color:'#B0AA9F'}}>{expanded?'▲':'▼'}</span>
+      </div>
+
+      {/* ── Contenu portée ── */}
+      {expanded&&(
+      <div style={{overflowX:'auto',padding:'8px 4px 12px'}}>
+        {piece.sections.map((section,si)=>{
+          const rows=[];
+          for(let i=0;i<section.measures.length;i+=COLS)
+            rows.push({meas:section.measures.slice(i,i+COLS),start:i});
+          return(<div key={si} style={{marginBottom:16}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+              <div style={{background:'#1A1A1A',color:'#F2EDE4',fontSize:8,fontWeight:800,
+                padding:'2px 6px',borderRadius:3}}>{section.name}</div>
+              <div style={{height:1,flex:1,background:'#D0CAC0'}}/>
+            </div>
+            {rows.map((row,ri)=>(
+              <div key={ri} style={{display:'flex',alignItems:'flex-start',marginBottom:4,minWidth:'fit-content'}}>
+                {ri===0?(
+                  <svg width={PREF_W_Z} height={STAFF_H} style={{flexShrink:0,overflow:'visible'}}>
+                    {STAFF_LINES.map(ly=>(
+                      <line key={ly} x1={0} y1={ly} x2={PREF_W_Z} y2={ly} stroke={INK} strokeWidth="1.3"/>
+                    ))}
+                    {renderClef(2,80)}
+                    {Array.from({length:ks.n}).map((_,i)=>(
+                      <text key={i} x={CLEF_W+i*10} y={(ks.t==='s'?SHP_Y_T:FLT_Y_T)[i]+4}
+                        fontSize="15" fontFamily="serif" fill={INK}>
+                        {ks.t==='s'?'♯':'♭'}
+                      </text>
+                    ))}
+                    {(()=>{
+                      const[num,den]=(timeSig||piece.timeSig||'4/4').split('/');
+                      const tx=CLEF_W+ACC_W+TSW/2;
+                      return(<>
+                        <text x={tx} y={52} fontSize="16" fontWeight="800"
+                          fontFamily="'Inter',sans-serif" fill={INK} textAnchor="middle">{num}</text>
+                        <text x={tx} y={68} fontSize="16" fontWeight="800"
+                          fontFamily="'Inter',sans-serif" fill={INK} textAnchor="middle">{den}</text>
+                      </>);
+                    })()}
+                    <line x1={PREF_W_Z-1} y1={STAFF_LINES[0]} x2={PREF_W_Z-1} y2={STAFF_LINES[4]}
+                      stroke={INK} strokeWidth="1.5"/>
+                  </svg>
+                ):(
+                  <svg width={PREF_W_Z} height={STAFF_H} style={{flexShrink:0,overflow:'visible'}}>
+                    {STAFF_LINES.map(ly=>(
+                      <line key={ly} x1={0} y1={ly} x2={PREF_W_Z} y2={ly} stroke={INK} strokeWidth="1.3"/>
+                    ))}
+                    <line x1={PREF_W_Z-1} y1={STAFF_LINES[0]} x2={PREF_W_Z-1} y2={STAFF_LINES[4]}
+                      stroke={INK} strokeWidth="1.5"/>
+                  </svg>
+                )}
+                {row.meas.map((measure,rmi)=>{
+                  const mi=row.start+rmi;
+                  const k=`${si}_${mi}`;
+                  const notes=staffNotes[k]||[];
+                  const isLast=rmi===row.meas.length-1;
+                  return(
+                    <svg key={rmi} width={MWD_Z} height={STAFF_H}
+                      onClick={(e)=>handleTap(e,si,mi)}
+                      style={{cursor:'crosshair',flexShrink:0,overflow:'visible'}}>
+                      {Array.from({length:totalBeats}).map((_,bi)=>(
+                        <line key={bi} x1={bi*SLOT_W} y1={STAFF_LINES[0]} x2={bi*SLOT_W} y2={STAFF_LINES[4]}
+                          stroke="#EDEAE4" strokeWidth="0.8"/>
+                      ))}
+                      {STAFF_LINES.map(ly=>(
+                        <line key={ly} x1={0} y1={ly} x2={MWD_Z} y2={ly} stroke={INK} strokeWidth="1.3"/>
+                      ))}
+                      <text x={4} y={22} fontSize="9" fill="#A0988E"
+                        fontFamily="'Inter',sans-serif" fontWeight="600">
+                        {measure.chords.map(c=>applyPrefs(c,prefs)).join(' / ')}
+                      </text>
+                      {notes.map((n,ni)=>{
+                        const nx=n.beat*SLOT_W+SLOT_W/2;
+                        return(
+                          <NoteShape key={ni} note={{...n,x:nx}} clef={clef}
+                            onRemove={()=>setStaffNotes(sn=>({
+                              ...sn,[k]:(sn[k]||[]).filter((_,i)=>i!==ni)
+                            }))}/>
+                        );
+                      })}
+                      <line x1={MWD_Z-1} y1={STAFF_LINES[0]} x2={MWD_Z-1} y2={STAFF_LINES[4]}
+                        stroke={INK} strokeWidth={isLast?3:1.5}/>
+                    </svg>
+                  );
+                })}
+              </div>
+            ))}
+          </div>);
+        })}
+        <div style={{textAlign:'center',color:'#B0AA9F',fontSize:10,marginTop:4,paddingBottom:8}}>
+          Tap mesure → placer note · Tap note → effacer · {totalBeats} croches/mesure
+        </div>
+      </div>
+      )}
+
+      {/* ── Sheet : choix de la note ── */}
+      {notePick.visible&&(
+        <Sheet onClose={()=>setNotePick(np=>({...np,visible:false}))}>
+          <div style={{padding:'14px 20px 32px'}}>
+            <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4,marginBottom:12}}>Valeur</div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+              {NOTE_VALS.map(nv=>(
+                <button key={nv.id}
+                  onClick={()=>setNotePick(np=>({...np,noteVal:nv.id}))}
+                  style={{flex:1,background:notePick.noteVal===nv.id?'#1A1A1A':'transparent',
+                    color:notePick.noteVal===nv.id?'#F2EDE4':'#1A1A1A',
+                    border:`1.5px solid ${notePick.noteVal===nv.id?'#1A1A1A':'#C0BAB0'}`,borderRadius:100,
+                    padding:'8px 10px',fontWeight:700,fontSize:14,cursor:'pointer',fontFamily:'inherit',
+                    display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
+                  <span style={{fontSize:18,fontFamily:'serif'}}>{nv.sym}</span>
+                  <span style={{fontSize:11}}>{nv.label}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4,marginBottom:10}}>Altération</div>
+            <div style={{display:'flex',gap:8,marginBottom:20}}>
+              {[[null,'♮','Naturel'],['#','♯','Dièse'],['b','♭','Bémol']].map(([v,sym,lbl])=>(
+                <button key={String(v)}
+                  onClick={()=>setNotePick(np=>({...np,noteAcc:np.noteAcc===v?null:v}))}
+                  style={{flex:1,background:notePick.noteAcc===v?'#4A3F2F':'transparent',
+                    color:notePick.noteAcc===v?'#F2EDE4':'#1A1A1A',
+                    border:`1.5px solid ${notePick.noteAcc===v?'#4A3F2F':'#C0BAB0'}`,borderRadius:100,
+                    padding:'8px 6px',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'serif',
+                    display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
+                  <span>{sym}</span>
+                  <span style={{fontFamily:'Inter,sans-serif',fontSize:10}}>{lbl}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setNotePick(np=>({...np,visible:false}))}
+                style={{flex:1,background:'transparent',border:'1.5px solid #C0BAB0',borderRadius:100,
+                  padding:'11px',fontWeight:700,fontSize:13,cursor:'pointer',color:'#8A847C',fontFamily:'inherit'}}>
+                Annuler
+              </button>
+              <button onClick={placeNote}
+                style={{flex:2,background:'#1A1A1A',border:'none',borderRadius:100,
+                  padding:'11px',fontWeight:700,fontSize:13,cursor:'pointer',color:'#F2EDE4',fontFamily:'inherit'}}>
+                Placer
+              </button>
+            </div>
+          </div>
+        </Sheet>
+      )}
+
+    </div>
+  );
+}
+
+// ─── PREFERENCES SCREEN ───────────────────────────────────────────────────────
+function PreferencesScreen({prefs,onUpdate,onBack}){
+  const rows=[
+    {key:'minor',label:'Accord mineur',opts:[['m','Cm7'],['−','C−7']],desc:'Préfixe pour les accords mineurs'},
+    {key:'dim',label:'Accord diminué',opts:[['°','C°  C°7'],['dim','Cdim  Cdim7']],desc:'Notation des accords diminués'},
+    {key:'maj7',label:'Septième majeure',opts:[['maj7','Cmaj7'],['Δ','CΔ']],desc:'Notation de la 7ème majeure'},
+    {key:'hdim',label:'Demi-diminué',opts:[['ø','Cø'],['m7b5','Cm7b5']],desc:'Notation demi-diminué'},
+    {key:'aug',label:'Accord augmenté',opts:[['+','C+'],['aug','Caug']],desc:'Notation des accords augmentés'},
+  ];
+  const ACCENT_OPTS=[
+    {val:'black',label:'Noir',preview:'#1A1A1A'},
+    {val:'red',  label:'Rouge',preview:'#C0392B'},
+  ];
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
+    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',display:'flex',alignItems:'center',gap:14}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,cursor:'pointer',padding:'4px',fontFamily:'inherit'}}>←</button>
+      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px'}}>Préférences d'affichage</span>
+    </div>
+    <div style={{flex:1,overflowY:'auto',padding:'20px'}}>
+      <div style={{background:'rgba(26,26,26,0.05)',borderRadius:12,padding:'12px 16px',marginBottom:22}}>
+        <p style={{fontSize:13,color:'#6B6560',lineHeight:1.55}}>
+          Ces réglages concernent uniquement votre affichage. Les accords sont stockés en forme canonique.
+        </p>
+      </div>
+
+      {/* ── Couleur d'accentuation ── */}
+      <div style={{marginBottom:28}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:3}}>Signes, reprises & volta</div>
+        <div style={{fontSize:11,color:'#8A847C',marginBottom:12}}>Couleur des barres de reprise, crochets de volta et signes de navigation</div>
+        <div style={{display:'flex',gap:10}}>
+          {ACCENT_OPTS.map(opt=>{
+            const active=prefs.accentColor===opt.val||(opt.val==='black'&&!prefs.accentColor);
+            return(<button key={opt.val} className="pref-btn" onClick={()=>onUpdate({...prefs,accentColor:opt.val})}
+              style={{flex:1,background:active?opt.preview:'#FAF8F4',
+                color:active?'#F2EDE4':opt.preview,
+                border:`1.5px solid ${active?opt.preview:'#D0CAC0'}`,
+                borderRadius:12,padding:'14px 12px',cursor:'pointer',fontFamily:'inherit',
+                display:'flex',flexDirection:'column',alignItems:'center',gap:8,transition:'all 0.12s'}}>
+              {/* Mini aperçu */}
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <div style={{display:'flex',alignItems:'center',gap:1}}>
+                  <div style={{width:4,height:4,borderRadius:'50%',background:active?'#F2EDE4':opt.preview}}/>
+                  <div style={{width:4,height:4,borderRadius:'50%',background:active?'#F2EDE4':opt.preview}}/>
+                  <div style={{width:5,height:18,background:active?'#F2EDE4':opt.preview,marginLeft:2}}/>
+                  <div style={{width:2,height:18,background:active?'#F2EDE4':opt.preview,marginLeft:1}}/>
+                </div>
+                <span style={{fontSize:14,fontWeight:900,fontStyle:'italic',color:active?'#F2EDE4':opt.preview}}>⊕</span>
+              </div>
+              <span style={{fontSize:13,fontWeight:700}}>{opt.label}</span>
+            </button>);
+          })}
+        </div>
+      </div>
+
+      {/* ── Auto-harmonisation ── */}
+      <div style={{marginBottom:28}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:3}}>Auto-harmonisation</div>
+        <div style={{fontSize:11,color:'#8A847C',marginBottom:12}}>Suggère automatiquement la qualité de l'accord selon la gamme du morceau (triades uniquement)</div>
+        <div style={{display:'flex',gap:10}}>
+          {[{val:true,label:'Activée',desc:'Triade diatonique'},{val:false,label:'Désactivée',desc:'Liberté totale'}].map(opt=>{
+            const active=opt.val===true?prefs.autoHarmonize!==false:prefs.autoHarmonize===false;
+            return(<button key={String(opt.val)} className="pref-btn"
+              onClick={()=>onUpdate({...prefs,autoHarmonize:opt.val})}
+              style={{flex:1,background:active?'#1A1A1A':'#FAF8F4',
+                color:active?'#F2EDE4':'#1A1A1A',
+                border:`1.5px solid ${active?'#1A1A1A':'#D0CAC0'}`,
+                borderRadius:12,padding:'14px 12px',cursor:'pointer',fontFamily:'inherit',
+                display:'flex',flexDirection:'column',alignItems:'center',gap:5,transition:'all 0.12s'}}>
+              <span style={{fontSize:16,fontWeight:900}}>{opt.label}</span>
+              <span style={{fontSize:11,color:active?'#A09A90':'#8A847C'}}>{opt.desc}</span>
+            </button>);
+          })}
+        </div>
+      </div>
+
+      {rows.map(row=>(
+        <div key={row.key} style={{marginBottom:24}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{row.label}</div>
+          <div style={{fontSize:11,color:'#8A847C',marginBottom:10}}>{row.desc}</div>
+          <div style={{display:'flex',gap:10}}>
+            {row.opts.map(([val,example])=>(
+              <button key={val} className="pref-btn" onClick={()=>onUpdate({...prefs,[row.key]:val})}
+                style={{flex:1,background:prefs[row.key]===val?'#1A1A1A':'#FAF8F4',
+                  color:prefs[row.key]===val?'#F2EDE4':'#1A1A1A',
+                  border:`1.5px solid ${prefs[row.key]===val?'#1A1A1A':'#D0CAC0'}`,
+                  borderRadius:12,padding:'14px 12px',cursor:'pointer',fontFamily:'inherit',
+                  display:'flex',flexDirection:'column',alignItems:'center',gap:5,transition:'all 0.12s'}}>
+                <span style={{fontSize:22,fontWeight:900}}>{val}</span>
+                <span style={{fontSize:12,color:prefs[row.key]===val?'#A09A90':'#8A847C',fontFamily:'monospace'}}>{example}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
+// ─── HOME SCREEN ──────────────────────────────────────────────────────────────
+function HomeScreen({onNavigate}){
+  const items=[{l:'Mes morceaux',k:'library'},{l:'SETLIST',k:'setlist'},{l:'Cloud',k:'cloud'},{l:'Préférences',k:'prefs'},{l:'Paramètres',k:'settings'}];
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'40px 40px 60px'}}>
+    <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%',maxWidth:340,marginBottom:50}}>
+      {items.map((item,i)=>(
+        <button key={item.k} className="home-btn"
+          style={{animationDelay:`${i*0.05}s`,background:'transparent',border:'2px solid #1A1A1A',color:'#1A1A1A',
+            padding:'17px 32px',borderRadius:100,fontSize:17,fontWeight:700,cursor:'pointer',
+            fontFamily:'inherit',textAlign:'center',width:'100%',transition:'all 0.15s'}}
+          onClick={()=>['library','prefs'].includes(item.k)&&onNavigate(item.k)}>
+          {item.l}
+        </button>
+      ))}
+    </div>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',opacity:0.85}}>
+      <SoupirLogo size={68}/>
+    </div>
+  </div>);
+}
+
+// ─── LIBRARY SCREEN ───────────────────────────────────────────────────────────
+function LibraryScreen({library,activePieceId,onSelect,onBack}){
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column'}}>
+    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',display:'flex',alignItems:'center',gap:14}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,cursor:'pointer',padding:'4px',fontFamily:'inherit'}}>←</button>
+      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px'}}>Mes morceaux</span>
+    </div>
+    <div style={{flex:1,overflowY:'auto',padding:'12px 20px'}}>
+      {library.map(p=>(
+        <div key={p.id} className="lib-row" onClick={()=>onSelect(p)}
+          style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+            padding:'16px 18px',borderRadius:14,marginBottom:6,cursor:'pointer',
+            background:p.id===activePieceId?'#1A1A1A':'transparent',
+            border:`1.5px solid ${p.id===activePieceId?'#1A1A1A':'#D0CAC0'}`,transition:'all 0.12s'}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:700,color:p.id===activePieceId?'#F2EDE4':'#1A1A1A'}}>{p.title}</div>
+            <div style={{fontSize:12,color:p.id===activePieceId?'#A09A90':'#8A847C',marginTop:3}}>
+              {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'} · {p.style}
+            </div>
+          </div>
+          <span style={{fontSize:18,color:p.id===activePieceId?'#F2EDE4':'#C0BAB0'}}>→</span>
+        </div>
+      ))}
+      <div style={{padding:'16px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',display:'flex',
+        alignItems:'center',gap:10,cursor:'pointer',marginTop:4}}>
+        <span style={{fontSize:22,color:'#C0BAB0'}}>+</span>
+        <span style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Nouveau morceau</span>
+      </div>
+    </div>
+  </div>);
+}
+
+// ─── INSERT SECTION SHEET ─────────────────────────────────────────────────────
+function InsertSectionSheet({onInsert,onClose}){
+  const [type,setType]=useState('grid');
+  const [name,setName]=useState('');
+  const pill=(active)=>({
+    flex:1,background:active?'#1A1A1A':'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?'#1A1A1A':'#C0BAB0'}`,borderRadius:12,
+    padding:'18px 12px',cursor:'pointer',fontFamily:'inherit',
+    display:'flex',flexDirection:'column',alignItems:'center',gap:6,transition:'all 0.12s'
+  });
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 20px 36px'}}>
+      <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+        letterSpacing:1.4,marginBottom:16}}>Insérer une section</div>
+      <div style={{display:'flex',gap:10,marginBottom:20}}>
+        <button style={pill(type==='grid')} onClick={()=>setType('grid')}>
+          <span style={{fontSize:26,lineHeight:1}}>𝄈</span>
+          <span style={{fontSize:13,fontWeight:700}}>Grille</span>
+          <span style={{fontSize:10,color:type==='grid'?'#A09A90':'#8A847C'}}>Accords, mesures</span>
+        </button>
+        <button style={pill(type==='staff')} onClick={()=>setType('staff')}>
+          <span style={{fontSize:26,fontFamily:'serif',lineHeight:1}}>𝄞</span>
+          <span style={{fontSize:13,fontWeight:700}}>Portée libre</span>
+          <span style={{fontSize:10,color:type==='staff'?'#A09A90':'#8A847C'}}>Notes, dessin</span>
+        </button>
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+          letterSpacing:1.2,marginBottom:8}}>Nom de la section</div>
+        <input value={name} onChange={e=>setName(e.target.value)}
+          placeholder="A, B, Intro, Bridge…"
+          style={{width:'100%',padding:'12px 14px',border:'1.5px solid #D0CAC0',borderRadius:12,
+            fontSize:16,fontWeight:600,background:'#FAF8F4',fontFamily:'inherit',outline:'none',
+            boxSizing:'border-box'}}/>
+      </div>
+      <button onClick={()=>{onInsert(type,name.trim()||'Section');onClose();}}
+        style={{width:'100%',background:'#1A1A1A',color:'#F2EDE4',border:'none',
+          borderRadius:14,padding:'16px',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+        Insérer
+      </button>
+    </div>
+  </Sheet>);
+}
+
+// ─── STAFF SECTION VIEW ────────────────────────────────────────────────────────
+function StaffSectionView({section,onUpdate}){
+  const [showSettings,setShowSettings]=useState(false);
+  const [drawing,setDrawing]=useState(false);
+  const [activeMi,setActiveMi]=useState(null); // mesure en cours de dessin
+  const [currentPath,setCurrentPath]=useState([]);
+  const [strokeColor,setStrokeColor]=useState('#1C1C1E');
+  const [strokeWidth,setStrokeWidth]=useState(2);
+  const svgRefs=useRef({});
+
+  const timeSig   = section.timeSig   || '4/4';
+  const clef      = section.clef      || 'treble';
+  const staffKey  = section.key       || 'C';
+  const showTimeSig = section.showTimeSig !== false;
+  const showKey     = section.showKey   !== false;
+
+  const COLS=4;
+  const ks=KEY_SIG[staffKey]||{t:'s',n:0};
+  const totalBeats=getBeatsInEighths(timeSig);
+  const SLOT_W=22;
+  const MWD=totalBeats*SLOT_W;
+  const CLEF_W=clef!=='none'?38:0;
+  const ACC_W=showKey&&clef!=='none'?Math.max(ks.n*10+6,4):0;
+  const TSW=showTimeSig?28:0;
+  const PREF_W=CLEF_W+ACC_W+TSW;
+  const INK='#1A1A1A';
+  const SHP_Y_S=[30,45,25,40,55,35,50];
+  const FLT_Y_S=[50,35,55,40,60,45,65];
+
+  function updateSection(patch){onUpdate({...section,...patch});}
+
+  function getSVGPt(e,svgEl){
+    const r=svgEl.getBoundingClientRect();
+    const scaleX=parseFloat(svgEl.getAttribute('width'))/r.width;
+    const scaleY=parseFloat(svgEl.getAttribute('height'))/r.height;
+    const src=e.touches?e.touches[0]:e;
+    return{x:(src.clientX-r.left)*scaleX,y:(src.clientY-r.top)*scaleY};
+  }
+
+  function pointsToPath(pts){
+    if(pts.length<2)return'';
+    return pts.map((p,i)=>(i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`)).join(' ');
+  }
+
+  function commitPath(mi){
+    if(currentPath.length<2){setDrawing(false);setCurrentPath([]);setActiveMi(null);return;}
+    const pd=pointsToPath(currentPath);
+    onUpdate({...section,measures:section.measures.map((mm,i)=>
+      i!==mi?mm:{...mm,annotations:[...(mm.annotations||[]),{path:pd,color:strokeColor,width:strokeWidth}]}
+    )});
+    setDrawing(false);setCurrentPath([]);setActiveMi(null);
+  }
+
+  function clearAnnotations(mi){
+    onUpdate({...section,measures:section.measures.map((mm,i)=>
+      i!==mi?mm:{...mm,annotations:[]}
+    )});
+  }
+
+  function clearAll(){
+    onUpdate({...section,measures:section.measures.map(mm=>({...mm,annotations:[]}))});
+  }
+
+  function addMeasure(){
+    onUpdate({...section,measures:[...section.measures,mkStaffMeasure()]});
+  }
+
+  function renderPrefix(){
+    return(<g>
+      {clef==='treble'&&<text x={2} y={69} fontSize="56" fontFamily="serif" fill={INK}>𝄞</text>}
+      {clef==='bass'  &&<text x={2} y={63} fontSize="38" fontFamily="serif" fill={INK}>𝄢</text>}
+      {showKey&&clef!=='none'&&ks.t==='s'&&Array.from({length:ks.n}).map((_,i)=>(
+        <text key={i} x={CLEF_W+i*10} y={SHP_Y_S[i]} fontSize="13" fontFamily="serif" fill={INK}>♯</text>
+      ))}
+      {showKey&&clef!=='none'&&ks.t==='f'&&Array.from({length:ks.n}).map((_,i)=>(
+        <text key={i} x={CLEF_W+i*10} y={FLT_Y_S[i]} fontSize="13" fontFamily="serif" fill={INK}>♭</text>
+      ))}
+      {showTimeSig&&(<>
+        <text x={CLEF_W+ACC_W+4} y={52} fontSize="16" fontWeight="bold" fontFamily="serif" fill={INK}>
+          {timeSig.split('/')[0]}
+        </text>
+        <text x={CLEF_W+ACC_W+4} y={68} fontSize="16" fontWeight="bold" fontFamily="serif" fill={INK}>
+          {timeSig.split('/')[1]}
+        </text>
+      </>)}
+    </g>);
+  }
+
+  function renderMeasureSVG(mi,isFirst){
+    const m=section.measures[mi];
+    const annotations=(m?.annotations)||[];
+    const svgW=(isFirst?PREF_W:0)+MWD+1;
+
+    return(
+      <svg key={mi}
+        ref={el=>{if(el)svgRefs.current[mi]=el;}}
+        width={svgW} height={STAFF_H}
+        style={{flexShrink:0,overflow:'visible',cursor:'crosshair',touchAction:'none',userSelect:'none'}}
+        onPointerDown={e=>{
+          e.preventDefault();
+          const svgEl=svgRefs.current[mi];if(!svgEl)return;
+          svgEl.setPointerCapture(e.pointerId);
+          setDrawing(true);setActiveMi(mi);
+          setCurrentPath([getSVGPt(e,svgEl)]);
+        }}
+        onPointerMove={e=>{
+          if(!drawing||activeMi!==mi)return;
+          e.preventDefault();
+          const svgEl=svgRefs.current[mi];if(!svgEl)return;
+          setCurrentPath(p=>[...p,getSVGPt(e,svgEl)]);
+        }}
+        onPointerUp={e=>{
+          if(activeMi===mi)commitPath(mi);
+        }}
+        onPointerCancel={()=>{setDrawing(false);setCurrentPath([]);setActiveMi(null);}}>
+
+        {/* Lignes de portée */}
+        {STAFF_LINES.map(ly=>(
+          <line key={ly} x1={0} x2={svgW} y1={ly} y2={ly} stroke={INK} strokeWidth="1" opacity="0.6"/>
+        ))}
+
+        {/* Préfixe (clef + armure + chiffrage) — 1ère mesure seulement */}
+        {isFirst&&renderPrefix()}
+
+        {/* Barre de fin de mesure */}
+        <line x1={svgW-1} y1={STAFF_LINES[0]} x2={svgW-1} y2={STAFF_LINES[4]}
+          stroke={INK} strokeWidth="1.3"/>
+
+        {/* Annotations sauvegardées */}
+        {annotations.map((ann,ai)=>(
+          <path key={ai} d={ann.path} fill="none" stroke={ann.color||'#1C1C1E'}
+            strokeWidth={ann.width||2} strokeLinecap="round" strokeLinejoin="round"/>
+        ))}
+
+        {/* Tracé en cours */}
+        {drawing&&activeMi===mi&&currentPath.length>1&&(
+          <path d={pointsToPath(currentPath)} fill="none" stroke={strokeColor}
+            strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+        )}
+      </svg>
+    );
+  }
+
+  const rows=[];
+  for(let i=0;i<section.measures.length;i+=COLS)
+    rows.push(section.measures.slice(i,i+COLS).map((_,j)=>i+j));
+
+  const pill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':col==='#1A1A1A'?'#1A1A1A':'#555',
+    border:`1.5px solid ${active?col:'#D0CAC0'}`,borderRadius:100,
+    padding:'6px 10px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all 0.1s'
+  });
+
+  return(
+    <div style={{background:'#FFFFFF',borderRadius:18,overflow:'hidden',
+      boxShadow:'0 2px 12px rgba(0,0,0,0.07),0 0 0 0.5px rgba(0,0,0,0.05)',marginBottom:24}}>
+
+      {/* ── En-tête ── */}
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
+        borderBottom:'0.5px solid rgba(0,0,0,0.07)'}}>
+        <span style={{fontSize:17,fontFamily:'serif',lineHeight:1,color:'#4A4A4A'}}>
+          {clef==='treble'?'𝄞':clef==='bass'?'𝄢':'—'}
+        </span>
+        <span style={{fontSize:12,fontWeight:700,flex:1,color:'#1C1C1E'}}>{section.name}</span>
+        {showTimeSig&&<span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>{timeSig}</span>}
+        <button onClick={()=>setShowSettings(s=>!s)}
+          style={{background:showSettings?'rgba(0,0,0,0.08)':'transparent',border:'none',
+            borderRadius:8,padding:'4px 8px',fontSize:16,cursor:'pointer',color:'#6B6560'}}>⚙</button>
+        <button onClick={clearAll}
+          style={{background:'transparent',border:'1px solid #FFBBBB',borderRadius:100,
+            padding:'3px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#C0392B',fontWeight:600}}>
+          Effacer
+        </button>
+      </div>
+
+      {/* ── Panneau de personnalisation ── */}
+      {showSettings&&(
+        <div style={{padding:'12px 14px',borderBottom:'0.5px solid rgba(0,0,0,0.07)',
+          background:'rgba(0,0,0,0.01)'}}>
+
+          {/* Clef */}
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+              letterSpacing:1.2,marginBottom:6}}>Clef</div>
+            <div style={{display:'flex',gap:6}}>
+              {[{v:'treble',l:'𝄞 Sol'},{v:'bass',l:'𝄢 Fa'},{v:'none',l:'— Aucune'}].map(opt=>(
+                <button key={opt.v} style={pill(clef===opt.v)}
+                  onClick={()=>updateSection({clef:opt.v})}>{opt.l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Armure */}
+          {clef!=='none'&&(
+            <div style={{marginBottom:12}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2}}>
+                  Armure
+                </div>
+                <button onClick={()=>updateSection({showKey:!showKey})}
+                  style={{fontSize:10,color:showKey?'#007AFF':'#8A847C',background:'none',border:'none',
+                    cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
+                  {showKey?'Affichée':'Masquée'}
+                </button>
+              </div>
+              {showKey&&(
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {ALL_KEYS.map(k=>(
+                    <button key={k} style={{...pill(staffKey===k),padding:'4px 8px',fontSize:11}}
+                      onClick={()=>updateSection({key:k})}>{k}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Chiffrage */}
+          <div style={{marginBottom:4}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+              <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2}}>
+                Chiffrage
+              </div>
+              <button onClick={()=>updateSection({showTimeSig:!showTimeSig})}
+                style={{fontSize:10,color:showTimeSig?'#007AFF':'#8A847C',background:'none',border:'none',
+                  cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
+                {showTimeSig?'Affiché':'Masqué'}
+              </button>
+            </div>
+            {showTimeSig&&(
+              <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                {TIME_SIGS.map(ts=>(
+                  <button key={ts} style={{...pill(timeSig===ts),padding:'4px 10px',fontSize:11}}
+                    onClick={()=>updateSection({timeSig:ts})}>{ts}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Portée ── */}
+      <div style={{overflowX:'auto',padding:'8px 4px 4px',background:'#FAFAF8'}}>
+        {rows.map((rowMis,ri)=>(
+          <div key={ri} style={{display:'flex',alignItems:'flex-start',marginBottom:4,minWidth:'fit-content'}}>
+            {ri>0&&<div style={{width:PREF_W,flexShrink:0}}/>}
+            {rowMis.map((mi,rmi)=>renderMeasureSVG(mi,ri===0&&rmi===0))}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Contrôles de dessin ── */}
+      <div style={{borderTop:'0.5px solid rgba(0,0,0,0.07)',padding:'10px 14px',
+        background:'rgba(0,0,0,0.01)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+
+        {/* Épaisseur */}
+        <div style={{display:'flex',gap:5,alignItems:'center'}}>
+          {[{v:1,l:'Fine'},{v:2,l:'Moyen'},{v:4,l:'Épais'}].map(opt=>(
+            <button key={opt.v}
+              style={{background:strokeWidth===opt.v?'#1A1A1A':'transparent',
+                color:strokeWidth===opt.v?'#F2EDE4':'#6B6560',
+                border:`1.5px solid ${strokeWidth===opt.v?'#1A1A1A':'#D0CAC0'}`,
+                borderRadius:100,padding:'3px 10px',fontSize:11,fontWeight:600,
+                cursor:'pointer',fontFamily:'inherit'}}
+              onClick={()=>setStrokeWidth(opt.v)}>{opt.l}</button>
+          ))}
+        </div>
+
+        {/* Couleur */}
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {['#1C1C1E','#C0392B','#1A6BBF','#2E7D32'].map(col=>(
+            <button key={col} onClick={()=>setStrokeColor(col)}
+              style={{width:22,height:22,borderRadius:'50%',background:col,border:'none',cursor:'pointer',
+                boxShadow:strokeColor===col?`0 0 0 2px #FFF, 0 0 0 4px ${col}`:'none',
+                transition:'box-shadow 0.12s'}}/>
+          ))}
+        </div>
+
+        <button onClick={addMeasure}
+          style={{marginLeft:'auto',background:'transparent',border:'1px solid #D0CAC0',
+            borderRadius:100,padding:'4px 12px',fontSize:11,cursor:'pointer',
+            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+          + Mesure
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── EDITOR SCREEN ────────────────────────────────────────────────────────────
+const GCOLS=4;
+const CHORD_FS=34;      // taille accords — dominant
+const MEASURE_MIN_H=136; // cellules généreuses
+
+function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,displayMode='maj',setDisplayMode,onBack,prefs}){
+  const [degreeMode,setDegreeMode]=useState(false);
+  const [showDegrees,setShowDegrees]=useState(false);
+  const [showKeyPicker,setShowKeyPicker]=useState(false);
+  const [showTimeSig,setShowTimeSig]=useState(false);
+  const [shownZones,setShownZones]=useState([]);
+  const [bpm,setBpm]=useState(piece.bpm);
+  const [metroOn,setMetroOn]=useState(false);
+  const [beat,setBeat]=useState(0);
+
+  // picker inclut maintenant : signs[], volta, measureText
+  const [picker,setPicker]=useState({
+    visible:false,si:0,mi:0,half:'a',ci:0,
+    letter:'C',acc:'',qualityId:'maj7',extensions:[],
+    measureText:'',signs:[],volta:null
+  });
+  const [measureSheet,setMeasureSheet]=useState(null); // {si, mi} — structurel uniquement
+  const [barlinePick,setBarlinePick]=useState(null);   // {si, mi, side}
+  const [insertSheet,setInsertSheet]=useState(null); // position index where to insert
+  const metroRef=useRef(null),beatRef=useRef(0);
+
+  const cur=library.find(p=>p.id===piece.id)||piece;
+  const timeSig=cur.timeSig||'4/4';
+  const scale=buildScale(displayKey,displayMode);
+
+  // Couleur d'accentuation (signes, reprises, volta)
+  const INK_ACCENT=prefs?.accentColor==='red'?'#C0392B':'#1A1A1A';
+  const SIGN_COLOR=prefs?.accentColor==='red'?'#C0392B':'#2A5A2A';
+
+  useEffect(()=>{
+    if(metroOn){const ms=60000/bpm;metroRef.current=setInterval(()=>{beatRef.current=(beatRef.current+1)%4;setBeat(beatRef.current);},ms);}
+    else{clearInterval(metroRef.current);setBeat(0);beatRef.current=0;}
+    return()=>clearInterval(metroRef.current);
+  },[metroOn,bpm]);
+
+  function handleKeyChange(newKey){
+    const semi=((noteIdx(newKey)-noteIdx(cur.key))%12+12)%12;
+    const flat=FLAT_KEYS.includes(newKey);
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,key:newKey,
+      sections:p.sections.map(s=>s.type==='staff'?s:({...s,measures:s.measures.map(mm=>({
+        ...mm,
+        chords:mm.chords.map(c=>transChord(c,semi,flat)),
+        split2:mm.split2?{...mm.split2,chords:mm.split2.chords.map(c=>transChord(c,semi,flat))}:null,
+      }))}))
+    }));
+    setDisplayKey(newKey);setShowKeyPicker(false);
+  }
+
+  function updateStaffSection(si,newSection){
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,i)=>i!==si?s:newSection)
+    }));
+  }
+  function insertSection(insertAt,type,name){
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      const secs=[...p.sections];
+      const newSec=type==='staff'
+        ?mkStaffSection(name,p.timeSig||'4/4','treble',p.key||'C')
+        :{name,type:'grid',startBar:'normal',measures:[mk(['C']),mk(['C']),mk(['C']),mk(['C'])]};
+      secs.splice(insertAt,0,newSec);
+      return{...p,sections:secs};
+    }));
+  }
+  const isSpec=(c)=>c==='/'||c==='—';
+
+  // Ouvre le ChordPicker en chargeant accord + signs + volta + text de la mesure
+  function openChordPicker(si,mi,half,ci,chord,e){
+    if(e)e.stopPropagation();
+    const safeChord=(chord==='%'||isSpec(chord))?'C':chord;
+    const parsed=parseChordFull(safeChord);
+    const{letter,acc}=rootToLetterAcc(parsed.root);
+    const mm=cur.sections[si]?.measures[mi];
+    const measureText=half==='b'?(mm?.split2?.text||''):(mm?.text||'');
+    const signs=half==='b'?(mm?.split2?.signs||[]):(mm?.signs||[]);
+    const volta=half==='b'?(mm?.split2?.volta||null):(mm?.volta||null);
+    setPicker({visible:true,si,mi,half,ci,letter,acc,
+      qualityId:parsed.qualityId,extensions:parsed.extensions,
+      measureText,signs,volta});
+  }
+
+  // Sauvegarde accord + signs + volta + text en une seule opération
+  function confirmPicker(){
+    const{si,mi,half,ci,letter,acc,qualityId,extensions,measureText,signs,volta}=picker;
+    const root=letter+(acc==='#'?'#':acc==='b'?'b':'');
+    const nc=buildChordStr(root,qualityId,extensions);
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:s.measures.map((mm,mI)=>{
+          if(mI!==mi)return mm;
+          if(half==='b'&&mm.split2){
+            return{...mm,split2:{...mm.split2,
+              chords:mm.split2.chords.map((c,cI)=>cI!==ci?c:nc),
+              text:measureText,signs:signs||[],volta:volta||null,
+            }};
+          }
+          return{...mm,
+            chords:mm.chords.map((c,cI)=>cI!==ci?c:nc),
+            text:measureText,signs:signs||[],volta:volta||null,
+          };
+        })};
+      })};
+    }));
+    setPicker(pk=>({...pk,visible:false}));
+  }
+
+  function updateBarline(si,mi,side,type){
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        if(side==='right')return{...s,measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,barAfter:type})};
+        if(mi===0)return{...s,startBar:type};
+        return{...s,measures:s.measures.map((mm,mI)=>mI!==(mi-1)?mm:{...mm,barAfter:type})};
+      })
+    }));
+    setBarlinePick(null);
+  }
+
+  function handleMeasureAction(si,mi,action){
+    setMeasureSheet(null);
+    if(action==='addChord'){
+      const mm0=cur.sections[si].measures[mi];
+      if(mm0.chords.length>=4)return; // cap à 4 accords par mesure
+      const srcChord=mm0.chords[mm0.chords.length-1]||'C';
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,chords:[...mm.chords,srcChord]})
+        })
+      }));
+    }
+    else if(action==='removeChord'){
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,chords:mm.chords.length>1?mm.chords.slice(0,-1):mm.chords})
+        })
+      }));
+    }
+    else if(action==='split'){
+      const srcChord=cur.sections[si].measures[mi].chords[0]||'C';
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,split2:mkSplit2([srcChord])})
+        })
+      }));
+    }
+    else if(action==='unsplit'){
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,split2:null})
+        })
+      }));
+    }
+    else if(action==='addMeasure'){
+      const srcChord=cur.sections[si].measures[mi].chords[0]||'C';
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:[...s.measures.slice(0,mi+1),mk([srcChord]),...s.measures.slice(mi+1)]
+        })
+      }));
+    }
+    else if(action==='deleteMeasure'){
+      const sec=cur.sections[si];
+      if(sec.measures.length<=1)return;
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,measures:s.measures.filter((_,mI)=>mI!==mi)})
+      }));
+    }
+  }
+
+  function addMeasureAtEnd(si){
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        const lastChord=s.measures[s.measures.length-1]?.chords[0]||'C';
+        return{...s,measures:[...s.measures,mk([lastChord])]};
+      })};
+    }));
+  }
+
+  function getDisp(chord){
+    if(!degreeMode)return applyPrefs(chord,prefs);
+    return chordToDeg(chord,displayKey)||applyPrefs(chord,prefs)+'✱';
+  }
+
+  // ── Rendu d'une demi-case ─────────────────────────────────────────────────────
+  // num = numéro de mesure (null pour half B d'un split)
+  function renderHalf(mm,half,si,mi,num){
+    const data=half==='b'?mm.split2:mm;
+    const hasSigns=data.signs&&data.signs.length>0;
+    const hasVolta=!!data.volta;
+    const VOLTA_H=18; // hauteur du crochet
+
+    // Taille adaptative selon le nombre d'accords (jusqu'à 4)
+    const nChords=data.chords.length;
+    const chFs=nChords>=4 ? Math.round(CHORD_FS*0.58)
+              :nChords===3 ? Math.round(CHORD_FS*0.70)
+              :nChords===2 ? Math.round(CHORD_FS*0.82)
+              :CHORD_FS;
+
+    return(
+      <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,position:'relative',
+        background:'transparent'}}>
+
+        {/* ── Crochet de volta ── */}
+        {hasVolta&&(
+          <div style={{
+            position:'absolute',top:0,left:0,right:0,
+            height:VOLTA_H,
+            borderLeft:`2.5px solid ${INK_ACCENT}`,
+            borderTop:`2.5px solid ${INK_ACCENT}`,
+            display:'flex',alignItems:'flex-start',
+            paddingLeft:6,paddingTop:3,
+            pointerEvents:'none',zIndex:2,
+          }}>
+            <span style={{fontSize:10,fontWeight:900,color:INK_ACCENT,lineHeight:1,fontStyle:'italic'}}>
+              {data.volta}.
+            </span>
+          </div>
+        )}
+
+        {/* ── Ligne du haut : signes (gauche) + numéro mesure (droite) ── */}
+        <div style={{
+          display:'flex',alignItems:'flex-start',justifyContent:'space-between',
+          paddingTop:hasVolta?VOLTA_H+4:6,paddingLeft:7,paddingRight:3,paddingBottom:0,
+          minHeight:hasVolta?VOLTA_H+14:18,
+        }}>
+          {/* Signes — tap ouvre ChordPicker */}
+          <div
+            onClick={(e)=>{e.stopPropagation();openChordPicker(si,mi,half,0,data.chords[0]||'C',e);}}
+            style={{flex:1,display:'flex',alignItems:'center',flexWrap:'wrap',gap:3,cursor:'pointer',minHeight:12}}>
+            {hasSigns&&(
+              <span style={{fontSize:9,color:SIGN_COLOR,fontWeight:900,letterSpacing:0.5,
+                background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px'}}>
+                {data.signs.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+              </span>
+            )}
+          </div>
+
+          {/* Numéro de mesure — ⋮ tap → options */}
+          {num!=null&&(
+            <div className="num-tap"
+              onClick={(e)=>{e.stopPropagation();setMeasureSheet({si,mi});}}
+              style={{display:'flex',alignItems:'center',gap:2,
+                cursor:'pointer',padding:'2px 5px 2px 4px',flexShrink:0,
+                borderRadius:6,transition:'background 0.1s'}}>
+              <span style={{fontSize:8,color:'#C8C2B8',fontWeight:500,lineHeight:1}}>{num}</span>
+              <span style={{fontSize:10,color:'#C8C2B8',fontWeight:700,lineHeight:1}}>⋮</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Accords — héros visuel de la cellule ── */}
+        <div style={{flex:1,display:'flex',alignItems:'center',
+          justifyContent:nChords===1?'center':'space-evenly',
+          padding:nChords>=3?'2px 4px 4px':'4px 8px 6px',position:'relative',
+          gap:nChords>=4?2:nChords===3?3:4}}>
+          {data.chords.map((chord,ci)=>{
+            const spec=isSpec(chord);
+            const idem=chord==='%';
+            const isDia=!spec&&!idem&&chordToDeg(chord,displayKey)!==null;
+            const disp=spec?chord:(idem?'%':getDisp(chord));
+            const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
+            return(<span key={ci} className={spec?'':'chord-tap'}
+              onClick={spec?undefined:(e)=>openChordPicker(si,mi,half,ci,chord,e)}
+              style={{
+                background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
+                padding:'3px 5px',borderRadius:8,lineHeight:1,
+                display:'inline-flex',alignItems:'center',cursor:spec?'default':'pointer',
+                transition:'background 0.08s,transform 0.08s'}}>
+              {spec?(
+                <span style={{fontSize:chFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>
+              ):idem?(
+                <span style={{fontSize:Math.round(chFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>
+              ):degreeMode?(
+                <DegreeText deg={disp} fs={chFs} color={chColor} weight={900}/>
+              ):(
+                <ChordText chord={disp} fs={chFs} color={chColor} weight={900}/>
+              )}
+            </span>);
+          })}
+
+        </div>
+
+        {/* ── Annotation ── */}
+        {data.text&&(
+          <div className="cell-text"
+            onClick={(e)=>{e.stopPropagation();openChordPicker(si,mi,half,0,data.chords[0]||'C',e);}}
+            style={{padding:'0 7px 6px',textAlign:'right',fontSize:9,fontStyle:'italic',
+              fontWeight:700,color:'#9A7050',cursor:'pointer',lineHeight:1.3,
+              borderRadius:3,transition:'background 0.1s'}}>
+            {data.text}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const tools=[{l:'Grille',i:'♯'},{l:'Partition',i:'𝄞'},{l:'Tablature',i:'═'},{l:'Texte',i:'T'},{l:'Image',i:'⬚'},{l:'Dessin',i:'✏'}];
+
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
+
+    {/* TOP BAR */}
+    <div style={{background:'rgba(255,255,255,0.88)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+      borderBottom:'0.5px solid #D0CCC4',height:52,
+      display:'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
+      <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+        <SoupirLogo size={16}/><span style={{fontSize:14,fontWeight:900,letterSpacing:'-0.5px'}}>Soupir.</span>
+      </div>
+      <div style={{width:1,height:16,background:'#D0CAC0',flexShrink:0}}/>
+      <span style={{fontSize:13,fontWeight:700,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
+      <button onClick={()=>setShowTimeSig(true)} className="icon-btn"
+        style={{background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+        <span style={{fontSize:12,fontWeight:800}}>{timeSig}</span>
+      </button>
+      <button onClick={()=>setShowKeyPicker(true)} className="icon-btn"
+        style={{display:'flex',alignItems:'center',gap:3,background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0}}>
+        <span style={{fontSize:9,color:'#8A847C',fontWeight:600}}>Ton.</span>
+        <span style={{fontSize:12,fontWeight:800}}>{displayKey}{displayMode==='min'?'m':''}</span>
+      </button>
+      <button onClick={()=>setDegreeMode(d=>!d)}
+        style={{background:degreeMode?'#1A1A1A':'transparent',border:'1.5px solid #1A1A1A',color:degreeMode?'#F2EDE4':'#1A1A1A',
+          padding:'3px 9px',borderRadius:100,fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,fontFamily:'inherit'}}>
+        {degreeMode?'Degrés':'Acc.'}
+      </button>
+      <div style={{display:'flex',alignItems:'center',gap:4,background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 7px',flexShrink:0}}>
+        <div style={{display:'flex',gap:2}}>
+          {[0,1,2,3].map(i=>(<div key={i} style={{width:4,height:4,borderRadius:'50%',transition:'all 0.06s',
+            background:metroOn&&beat===i?(i===0?'#1A1A1A':'#6B6560'):'#C0BAB0',
+            transform:metroOn&&beat===i?'scale(1.35)':'scale(1)'}}/>))}
+        </div>
+        <input type="number" value={bpm} min={40} max={300} onChange={e=>setBpm(Number(e.target.value))}
+          style={{width:30,background:'transparent',border:'none',color:'#1A1A1A',fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
+        <button onClick={()=>setMetroOn(m=>!m)}
+          style={{background:metroOn?'#1A1A1A':'transparent',border:`1.5px solid ${metroOn?'#1A1A1A':'#C0BAB0'}`,
+            color:metroOn?'#F2EDE4':'#8A847C',width:18,height:18,borderRadius:'50%',cursor:'pointer',
+            fontSize:7,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>
+          {metroOn?'■':'▶'}
+        </button>
+      </div>
+      <button onClick={()=>setShowDegrees(v=>!v)}
+        style={{background:showDegrees?'#1A1A1A':'transparent',border:`1.5px solid ${showDegrees?'#1A1A1A':'#D0CAC0'}`,
+          color:showDegrees?'#F2EDE4':'#8A847C',width:26,height:26,borderRadius:'50%',cursor:'pointer',
+          fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit'}}>♩</button>
+    </div>
+
+    {/* CONTENT */}
+    <div style={{flex:1,overflowY:'auto',padding:'10px 10px 4px',position:'relative',background:'#F2F0EB'}}>
+
+        <div style={{marginBottom:12,paddingBottom:10,paddingLeft:4,borderBottom:'1px solid #D0CAC0'}}>
+          <div style={{fontSize:20,fontWeight:800,letterSpacing:'-0.6px',color:'#1C1C1E'}}>{cur.title}</div>
+          <div style={{fontSize:11,color:'#8A847C',marginTop:3,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+            <span>{displayKey}{displayMode==='min'?'m':''} · {bpm} BPM · {timeSig}</span>
+            {degreeMode&&<><span>·</span><span style={{fontWeight:700,color:'#4A3F2F'}}>Mode degrés</span></>}
+          </div>
+        </div>
+
+        {/* ── GRILLE / PORTÉES ── */}
+        {/* Bouton d'insertion avant la 1ère section */}
+        <div style={{display:'flex',justifyContent:'center',marginBottom:8}}>
+          <button onClick={()=>setInsertSheet(0)}
+            style={{background:'transparent',border:'1.5px dashed #C0BAB0',borderRadius:100,
+              padding:'4px 16px',fontSize:12,color:'#B0AA9F',cursor:'pointer',fontFamily:'inherit',
+              display:'flex',alignItems:'center',gap:4}}>
+            <span style={{fontSize:16,lineHeight:1}}>+</span>
+            <span style={{fontWeight:600}}>Insérer une section</span>
+          </button>
+        </div>
+        {(()=>{
+          let mCount=0;
+          return cur.sections.map((section,si)=>{
+
+            // ── Section portée autonome ────────────────────────────────────
+            if(section.type==='staff'){
+              return(<React.Fragment key={si}>
+                <StaffSectionView section={section} onUpdate={ns=>updateStaffSection(si,ns)}/>
+                <div style={{display:'flex',justifyContent:'center',marginBottom:8,marginTop:-16}}>
+                  <button onClick={()=>setInsertSheet(si+1)}
+                    style={{background:'transparent',border:'1.5px dashed #C0BAB0',borderRadius:100,
+                      padding:'3px 14px',fontSize:11,color:'#C0BAB0',cursor:'pointer',fontFamily:'inherit',
+                      display:'flex',alignItems:'center',gap:3}}>
+                    <span style={{fontSize:14,lineHeight:1}}>+</span>
+                    <span style={{fontWeight:600}}>Insérer</span>
+                  </button>
+                </div>
+              </React.Fragment>);
+            }
+
+            // ── Section grille (existant) ──────────────────────────────────
+            const rows=[];
+            for(let i=0;i<section.measures.length;i+=GCOLS)
+              rows.push({meas:section.measures.slice(i,i+GCOLS),start:i});
+
+            const isLastSection=si===cur.sections.length-1;
+            return(<div key={si} style={{marginBottom:24}}>
+              {/* ── En-tête section iOS ── */}
+              <div style={{paddingLeft:14,paddingBottom:6,paddingTop:si>0?2:0}}>
+                <span style={{fontSize:10,fontWeight:700,color:'#8E8E93',
+                  textTransform:'uppercase',letterSpacing:1.5}}>{section.name}</span>
+              </div>
+              {/* ── Carte iOS ── */}
+              <div style={{borderRadius:18,overflow:'hidden',background:'#FFFFFF',
+                boxShadow:'0 2px 12px rgba(0,0,0,0.07),0 0 0 0.5px rgba(0,0,0,0.05)'}}>
+              {rows.map((row,ri)=>{
+                const isLastRow=ri===rows.length-1;
+                const showAddBtn=isLastSection&&isLastRow;
+                return(
+                <div key={ri} style={{display:'flex',alignItems:'stretch',
+                  borderTop:ri>0?'0.5px solid rgba(0,0,0,0.08)':'none'}}>
+
+                  {/* Barre gauche — tap direct pour modifier */}
+                  <Barline
+                    type={ri===0?(section.startBar||'normal'):'normal'}
+                    onClick={ri===0?(e)=>{e.stopPropagation();setBarlinePick({si,mi:0,side:'left'});}:undefined}
+                    minH={MEASURE_MIN_H}
+                    accentColor={INK_ACCENT}
+                  />
+
+                  {/* Cases */}
+                  {row.meas.map((measure,rmi)=>{
+                    const mi=row.start+rmi;
+                    mCount++;
+                    const num=mCount;
+                    const isSplit=!!measure.split2;
+
+                    return(<React.Fragment key={mi}>
+                      <div style={{flex:1,display:'flex',flexDirection:'row',
+                        minHeight:MEASURE_MIN_H,position:'relative',
+                        background:'rgba(0,0,0,0.005)',minWidth:0,overflow:'hidden'}}>
+
+                        {isSplit?(
+                          <>
+                            {renderHalf(measure,'a',si,mi,num)}
+                            <div style={{width:2,background:'rgba(0,0,0,0.20)',flexShrink:0,alignSelf:'stretch'}}/>
+                            {renderHalf(measure,'b',si,mi,null)}
+                          </>
+                        ):(
+                          renderHalf(measure,'a',si,mi,num)
+                        )}
+                      </div>
+
+                      {/* Barre droite — tap direct */}
+                      <Barline
+                        type={measure.barAfter||'normal'}
+                        onClick={(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}}
+                        minH={MEASURE_MIN_H}
+                        accentColor={INK_ACCENT}
+                      />
+                    </React.Fragment>);
+                  })}
+
+                  {/* Remplissage ligne incomplète */}
+                  {row.meas.length<GCOLS&&Array.from({length:GCOLS-row.meas.length}).map((_,pi)=>(
+                    <React.Fragment key={`p${pi}`}>
+                      <div style={{flex:1,background:'transparent',minHeight:MEASURE_MIN_H,
+                        display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        {showAddBtn&&pi===0&&(
+                          <button onClick={()=>addMeasureAtEnd(si)}
+                            style={{width:44,height:44,borderRadius:'50%',
+                              border:'2px dashed #C0BAB0',background:'transparent',
+                              color:'#B0AA9F',fontSize:26,cursor:'pointer',fontFamily:'inherit',
+                              display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>
+                            +
+                          </button>
+                        )}
+                      </div>
+                      <Barline type="normal" minH={MEASURE_MIN_H} accentColor={INK_ACCENT}/>
+                    </React.Fragment>
+                  ))}
+                </div>
+                );
+              })}
+              </div>{/* fin carte iOS */}
+              {/* Bouton + si dernière ligne complète */}
+              {isLastSection&&rows[rows.length-1].meas.length===GCOLS&&(
+                <div style={{display:'flex',justifyContent:'flex-start',padding:'5px 0 2px 56px'}}>
+                  <button onClick={()=>addMeasureAtEnd(si)}
+                    style={{background:'transparent',border:'none',color:'#B0AA9F',fontSize:13,
+                      cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:4}}>
+                    <span style={{fontSize:20,lineHeight:1}}>+</span>
+                    <span style={{fontWeight:600}}>Ajouter une mesure</span>
+                  </button>
+                </div>
+              )}
+            <div style={{display:'flex',justifyContent:'center',marginBottom:8,marginTop:-8}}>
+              <button onClick={()=>setInsertSheet(si+1)}
+                style={{background:'transparent',border:'1.5px dashed #C0BAB0',borderRadius:100,
+                  padding:'3px 14px',fontSize:11,color:'#C0BAB0',cursor:'pointer',fontFamily:'inherit',
+                  display:'flex',alignItems:'center',gap:3}}>
+                <span style={{fontSize:14,lineHeight:1}}>+</span>
+                <span style={{fontWeight:600}}>Insérer</span>
+              </button>
+            </div>
+            </div>);
+          });
+        })()}
+
+        <div style={{textAlign:'center',color:'#C0BAB0',fontSize:9,paddingBottom:12,paddingTop:4}}>
+          Tap accord · Tap barre · ⋮ pour options
+        </div>
+
+        {/* Partition inline — portée modifiable sous la grille */}
+        {shownZones.includes('Partition')&&(
+          <div style={{marginTop:8}}>
+            <StaffZone piece={cur} prefs={prefs} timeSig={timeSig}/>
+          </div>
+        )}
+
+        {/* Degrés panel */}
+        {showDegrees&&(<div style={{position:'fixed',top:60,right:12,background:'rgba(237,232,224,0.97)',
+          border:'1.5px solid #D0CAC0',borderRadius:14,padding:'10px 14px',
+          backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',
+          minWidth:148,zIndex:200,boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,paddingBottom:6,borderBottom:'1px solid #D0CAC0'}}>
+            <span style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1}}>{displayKey}</span>
+            <button onClick={()=>setShowDegrees(false)}
+              style={{background:'transparent',border:'none',color:'#8A847C',fontSize:18,cursor:'pointer',fontFamily:'inherit'}}>×</button>
+          </div>
+          {scale.map((item,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'4px'}}>
+              <span style={{fontSize:11,color:'#6B6560',fontWeight:800,width:24,textAlign:'right',flexShrink:0}}>{item.degree}</span>
+              <span style={{fontSize:10,color:'#C0BAB0'}}>—</span>
+              <span style={{fontSize:13,color:'#1A1A1A',fontWeight:700}}>
+                {item.note}<span style={{fontSize:10,color:'#8A847C',fontWeight:500}}>{item.quality}</span>
+              </span>
+            </div>
+          ))}
+        </div>)}
+
+        {/* Key picker */}
+        {showKeyPicker&&(<Sheet onClose={()=>setShowKeyPicker(false)}>
+          <div style={{padding:'14px 20px 32px'}}>
+            <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4,marginBottom:12}}>Tonalité</div>
+            {/* Mode Maj / Min */}
+            <div style={{display:'flex',gap:8,marginBottom:18,background:'rgba(0,0,0,0.05)',borderRadius:12,padding:4}}>
+              {[{v:'maj',l:'Majeur'},{v:'min',l:'Mineur'}].map(m=>(
+                <button key={m.v} className="pill-btn"
+                  style={{flex:1,background:displayMode===m.v?'#1A1A1A':'transparent',
+                    color:displayMode===m.v?'#F2EDE4':'#8A847C',border:'none',
+                    borderRadius:10,padding:'9px 0',fontWeight:700,fontSize:14,
+                    cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}
+                  onClick={()=>setDisplayMode(m.v)}>{m.l}</button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              {ALL_KEYS.map(k=>(
+                <button key={k} className="pill-btn"
+                  style={{background:k===displayKey?'#1A1A1A':'transparent',color:k===displayKey?'#F2EDE4':'#1A1A1A',
+                    border:`1.5px solid ${k===displayKey?'#1A1A1A':'#C0BAB0'}`,borderRadius:100,
+                    padding:'10px 16px',fontWeight:700,fontSize:16,cursor:'pointer',fontFamily:'inherit'}}
+                  onClick={()=>handleKeyChange(k)}>{k}</button>
+              ))}
+            </div>
+          </div>
+        </Sheet>)}
+
+        {showTimeSig&&<TimeSigPicker current={timeSig}
+          onSelect={ts=>{setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,timeSig:ts}));setShowTimeSig(false);}}
+          onClose={()=>setShowTimeSig(false)}/>}
+
+        {picker.visible&&<ChordPicker picker={picker} onChange={setPicker}
+          onConfirm={confirmPicker}
+          onCancel={()=>setPicker(pk=>({...pk,visible:false}))}
+          prefs={prefs} displayKey={displayKey} displayMode={displayMode} autoHarmonize={!!prefs?.autoHarmonize}/>}
+
+        {measureSheet&&(<MeasureSheet si={measureSheet.si} mi={measureSheet.mi}
+          measure={cur.sections[measureSheet.si]?.measures[measureSheet.mi]}
+          onAction={a=>handleMeasureAction(measureSheet.si,measureSheet.mi,a)}
+          onClose={()=>setMeasureSheet(null)} prefs={prefs}/>)}
+
+        {insertSheet!==null&&(<InsertSectionSheet
+          onInsert={(type,name)=>insertSection(insertSheet,type,name)}
+          onClose={()=>setInsertSheet(null)}/>)}
+
+        {barlinePick&&(<BarlinePicker
+          current={barlinePick.side==='right'
+            ?(cur.sections[barlinePick.si]?.measures[barlinePick.mi]?.barAfter||'normal')
+            :(barlinePick.mi===0?(cur.sections[barlinePick.si]?.startBar||'normal'):(cur.sections[barlinePick.si]?.measures[barlinePick.mi-1]?.barAfter||'normal'))}
+          onSelect={t=>updateBarline(barlinePick.si,barlinePick.mi,barlinePick.side,t)}
+          onClose={()=>setBarlinePick(null)}/>)}
+
+    </div>
+
+    {/* BOTTOM TOOLBAR */}
+    <div style={{background:'rgba(255,255,255,0.92)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+      borderTop:'0.5px solid rgba(0,0,0,0.1)',minHeight:56,
+      display:'flex',alignItems:'center',justifyContent:'center',gap:2,
+      padding:'0 8px',paddingBottom:'env(safe-area-inset-bottom, 0px)',flexShrink:0}}>
+      {tools.map(t=>{
+        const isGrid=t.l==='Grille';
+        const active=isGrid||shownZones.includes(t.l);
+        return(
+        <button key={t.l}
+          onClick={()=>{if(!isGrid)setShownZones(z=>z.includes(t.l)?z.filter(x=>x!==t.l):[...z,t.l]);}}
+          style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'5px 13px',
+            background:'transparent',
+            border:'none',
+            borderRadius:12,color:active?'#007AFF':'#8E8E93',
+            cursor:'pointer',fontSize:active?17:15,lineHeight:1,transition:'all 0.12s',fontFamily:'inherit',
+            fontWeight:active?700:400}}>
+          <span style={{fontSize:active?17:16}}>{t.i}</span>
+          <span style={{fontSize:9,fontWeight:active?600:400,letterSpacing:0.3,marginTop:1}}>{t.l}</span>
+        </button>
+        );
+      })}
+    </div>
+  </div>);
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App(){
+  const [view,setView]=useState('home');
+  const [library,setLibrary]=useState(LIBRARY_INIT);
+  const [pieceId,setPieceId]=useState(1);
+  const [displayKey,setDisplayKey]=useState('Bb');
+  const [displayMode,setDisplayMode]=useState('maj');
+  const [prefs,setPrefs]=useState(loadPrefs);
+  function updatePrefs(p){setPrefs(p);savePrefs(p);}
+  const piece=library.find(p=>p.id===pieceId)||library[0];
+  function selectPiece(p){setPieceId(p.id);setDisplayKey(p.key);setView('editor');}
+  if(view==='home')    return <HomeScreen    onNavigate={v=>setView(v)}/>;
+  if(view==='library') return <LibraryScreen library={library} activePieceId={pieceId} onSelect={selectPiece} onBack={()=>setView('home')}/>;
+  if(view==='prefs')   return <PreferencesScreen prefs={prefs} onUpdate={updatePrefs} onBack={()=>setView('home')}/>;
+  if(view==='editor')  return <EditorScreen  library={library} setLibrary={setLibrary} piece={piece} displayKey={displayKey} setDisplayKey={setDisplayKey} displayMode={displayMode} setDisplayMode={setDisplayMode} onBack={()=>setView('library')} prefs={prefs}/>;
+  return null;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
+  }
+</script>
+</body>
+</html>
